@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { requireAdmin } from "@/lib/require-admin";
 import { db } from "@/db";
 import { parents, parentStudents, students } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -8,7 +9,10 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
+  const session = await requireAdmin();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
