@@ -133,3 +133,56 @@ export const studentClassrooms = pgTable(
     uniqueStudentYear: unique().on(table.studentId, table.schoolYearId),
   })
 );
+
+export const fundraisingStatusEnum = pgEnum("fundraising_status", [
+  "prospective",
+  "contacted",
+  "active",
+  "inactive",
+]);
+
+export const fundraisingPartners = pgTable("fundraising_partners", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  status: fundraisingStatusEnum("status").notNull().default("prospective"),
+  contactName: text("contact_name"),
+  contactEmail: text("contact_email"),
+  contactPhone: text("contact_phone"),
+  website: text("website"),
+  notes: text("notes"),
+});
+
+export const fundraisingCampaigns = pgTable(
+  "fundraising_campaigns",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    partnerId: uuid("partner_id")
+      .notNull()
+      .references(() => fundraisingPartners.id, { onDelete: "cascade" }),
+    schoolYearId: uuid("school_year_id")
+      .notNull()
+      .references(() => schoolYears.id, { onDelete: "restrict" }),
+    percentBackBasisPoints: integer("percent_back_basis_points"), // 10% -> 1000
+    amountReceivedCents: integer("amount_received_cents").notNull().default(0),
+    amountLoggedMonth: integer("amount_logged_month"), // 1-12, which month the annual total counts toward in the summary
+    comments: text("comments"),
+  },
+  (table) => ({
+    uniquePartnerYear: unique().on(table.partnerId, table.schoolYearId),
+  })
+);
+
+export const fundraisingMonthlyActivity = pgTable(
+  "fundraising_monthly_activity",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => fundraisingCampaigns.id, { onDelete: "cascade" }),
+    month: integer("month").notNull(), // 1-12
+    note: text("note"),
+  },
+  (table) => ({
+    uniqueCampaignMonth: unique().on(table.campaignId, table.month),
+  })
+);

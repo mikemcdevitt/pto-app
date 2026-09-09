@@ -1,11 +1,12 @@
 import { auth } from "@/auth";
+import { requireAdmin } from "@/lib/require-admin";
 import { db } from "@/db";
 import { parents } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET() {
-  const session = await auth();
+  const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const all = await db.select().from(parents).orderBy(asc(parents.lastName), asc(parents.firstName));
