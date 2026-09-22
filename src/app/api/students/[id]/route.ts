@@ -29,7 +29,11 @@ export async function PATCH(
   const body = await request.json();
   const [updated] = await db
     .update(students)
-    .set({ firstName: body.firstName, lastName: body.lastName })
+    .set({
+      firstName: body.firstName,
+      lastName: body.lastName,
+      cohortYear: body.cohortYear ?? null,
+    })
     .where(eq(students.id, id))
     .returning();
   if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 });

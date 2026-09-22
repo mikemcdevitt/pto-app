@@ -4,7 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 interface StudentFormProps {
-  initialData?: { id: string; firstName: string; lastName: string };
+  initialData?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    cohortYear: number | null;
+  };
 }
 
 export default function StudentForm({ initialData }: StudentFormProps) {
@@ -13,6 +18,9 @@ export default function StudentForm({ initialData }: StudentFormProps) {
 
   const [firstName, setFirstName] = useState(initialData?.firstName ?? "");
   const [lastName, setLastName] = useState(initialData?.lastName ?? "");
+  const [cohortYear, setCohortYear] = useState(
+    initialData?.cohortYear != null ? String(initialData.cohortYear) : ""
+  );
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -27,7 +35,11 @@ export default function StudentForm({ initialData }: StudentFormProps) {
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ firstName, lastName }),
+      body: JSON.stringify({
+        firstName,
+        lastName,
+        cohortYear: cohortYear.trim() === "" ? null : Number(cohortYear),
+      }),
     });
 
     if (!res.ok) {
@@ -77,6 +89,22 @@ export default function StudentForm({ initialData }: StudentFormProps) {
           required
           className="w-full border rounded p-2"
         />
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Cohort</label>
+        <input
+          type="number"
+          inputMode="numeric"
+          value={cohortYear}
+          onChange={(e) => setCohortYear(e.target.value)}
+          placeholder="e.g. 2031"
+          min={2000}
+          max={2100}
+          className="w-full border rounded p-2"
+        />
+        <p className="text-xs text-gray-500 mt-1">
+          The year of the summer this student is expected to finish 5th grade.
+        </p>
       </div>
 
       {error && <p className="text-red-600 text-sm">{error}</p>}

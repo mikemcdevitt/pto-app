@@ -26,6 +26,7 @@ export default async function StudentsPage() {
         <thead>
           <tr className="text-left border-b">
             <th className="p-2">Name</th>
+            <th className="p-2">Cohort</th>
             <th className="p-2"></th>
           </tr>
         </thead>
@@ -33,6 +34,7 @@ export default async function StudentsPage() {
           {allStudents.map((s) => (
             <tr key={s.id} className="border-b">
               <td className="p-2">{s.firstName} {s.lastName}</td>
+              <td className="p-2">{s.cohortYear ?? <span className="text-gray-400">—</span>}</td>
               <td className="p-2">
                 <Link href={`/admin/students/${s.id}`} className="text-blue-600">Edit</Link>
               </td>

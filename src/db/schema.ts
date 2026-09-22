@@ -98,6 +98,11 @@ export const students = pgTable("students", {
   id: uuid("id").defaultRandom().primaryKey(),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
+  // The calendar year of the summer this student is expected to finish
+  // fifth grade (e.g. a student finishing 5th grade in June 2031 is
+  // cohort 2031). Nullable so existing students aren't blocked/broken;
+  // set going forward via the Add/Edit Student forms.
+  cohortYear: integer("cohort_year"),
 });
 
 export const parentStudents = pgTable(
