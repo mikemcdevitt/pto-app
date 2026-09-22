@@ -1,6 +1,11 @@
-import { auth } from "@/auth";
+import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
+import authConfig from "@/auth.config";
+
+// Edge Middleware needs its own NextAuth instance built from the edge-safe
+// config only (no adapter, no Nodemailer) — see src/auth.config.ts for why.
+const { auth } = NextAuth(authConfig);
 
 const adminEmails = (process.env.ADMIN_EMAILS ?? "")
   .split(",")
