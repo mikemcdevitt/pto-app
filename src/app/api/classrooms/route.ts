@@ -1,4 +1,3 @@
-import { auth } from "@/auth";
 import { requireAdmin } from "@/lib/require-admin";
 import { db } from "@/db";
 import { classrooms } from "@/db/schema";
@@ -19,7 +18,7 @@ if (!session) {
 }
 
 export async function POST(request: Request) {
-  const session = await auth();
+  const session = await requireAdmin();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
