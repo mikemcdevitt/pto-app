@@ -3,6 +3,14 @@ import { parents } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import Link from "next/link";
 
+// Always hit the database on request; this route has no dynamic
+// function calls (no auth()/cookies()/searchParams), so Next.js would
+// otherwise be free to statically prerender it once and keep serving
+// that snapshot until the next deploy -- meaning new/edited parents
+// or students wouldn't show up here without a redeploy.
+export const dynamic = "force-dynamic";
+
+
 export default async function ParentsPage() {
   const allParents = await db.select().from(parents).orderBy(asc(parents.lastName), asc(parents.firstName));
 
