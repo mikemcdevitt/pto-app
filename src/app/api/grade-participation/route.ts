@@ -10,24 +10,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { schoolYears } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
-
-const GRADE_ORDER = [
-  "kindergarten",
-  "first",
-  "second",
-  "third",
-  "fourth",
-  "fifth",
-] as const;
-
-const GRADE_LABEL: Record<(typeof GRADE_ORDER)[number], string> = {
-  kindergarten: "K",
-  first: "Gr 1",
-  second: "Gr 2",
-  third: "Gr 3",
-  fourth: "Gr 4",
-  fifth: "Gr 5",
-};
+import { GRADE_ORDER, GRADE_LABEL } from "@/lib/grades";
 
 // Allow the Wix site to fetch this cross-origin. CORS only affects browser
 // fetches, not direct curl access — that's fine here since the response

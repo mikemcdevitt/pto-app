@@ -1,8 +1,8 @@
 import { auth } from "@/auth";
 import { requireAdmin } from "@/lib/require-admin";
 import { db } from "@/db";
-import { students } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { students, studentClassrooms } from "@/db/schema";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -37,6 +37,37 @@ export async function PATCH(
     .where(eq(students.id, id))
     .returning();
   if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Optional classroom assignment for a given school year, from the admin
+  // Edit Student form's cohort-based classroom picklist. A classroomId
+  // upserts the assignment; a schoolYearId with no classroomId clears
+  // whatever assignment exists for that year (the admin picked
+  // "Unassigned").
+  if (body.schoolYearId) {
+    if (body.classroomId) {
+      await db
+        .insert(studentClassrooms)
+        .values({
+          studentId: id,
+          schoolYearId: body.schoolYearId,
+          classroomId: body.classroomId,
+        })
+        .onConflictDoUpdate({
+          target: [studentClassrooms.studentId, studentClassrooms.schoolYearId],
+          set: { classroomId: body.classroomId },
+        });
+    } else {
+      await db
+        .delete(studentClassrooms)
+        .where(
+          and(
+            eq(studentClassrooms.studentId, id),
+            eq(studentClassrooms.schoolYearId, body.schoolYearId)
+          )
+        );
+    }
+  }
+
   return NextResponse.json(updated);
 }
 
