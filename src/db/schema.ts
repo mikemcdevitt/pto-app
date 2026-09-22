@@ -186,3 +186,24 @@ export const fundraisingMonthlyActivity = pgTable(
     uniqueCampaignMonth: unique().on(table.campaignId, table.month),
   })
 );
+
+
+export const donations = pgTable(
+  "donations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    wixOrderId: text("wix_order_id").notNull().unique(),
+    wixOrderNumber: text("wix_order_number"),
+    donorEmail: text("donor_email").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    wixCampaignId: text("wix_campaign_id").notNull(),
+    schoolYearId: uuid("school_year_id")
+      .notNull()
+      .references(() => schoolYears.id, { onDelete: "restrict" }),
+    orderCreatedAt: timestamp("order_created_at", { withTimezone: true }).notNull(),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueDonorCampaign: unique().on(table.donorEmail, table.wixCampaignId),
+  })
+);

@@ -1,0 +1,24 @@
+name: Sync Wix donations
+
+on:
+  schedule:
+    # Every 30 minutes. GitHub's scheduler is best-effort and can lag a few
+    # minutes under load — fine for this, it's just feeding a bar chart.
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {} # lets you trigger it manually from the Actions tab
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call sync endpoint
+        run: |
+          status=$(curl -s -o response.txt -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ vars.PTO_APP_URL }}/api/cron/sync-wix-donations")
+          echo "HTTP $status"
+          cat response.txt
+          if [ "$status" -ge 300 ]; then
+            echo "::error::Sync request failed with HTTP $status"
+            exit 1
+          fi
