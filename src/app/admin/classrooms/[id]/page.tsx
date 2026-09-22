@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { classrooms, schoolYears } from "@/db/schema";
-import { asc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import ClassroomForm from "../ClassroomForm";
 
@@ -13,7 +13,7 @@ export default async function EditClassroomPage({
   const [classroom] = await db.select().from(classrooms).where(eq(classrooms.id, id));
   if (!classroom) notFound();
 
-  const years = await db.select().from(schoolYears).orderBy(asc(schoolYears.sortYear));
+  const years = await db.select().from(schoolYears).orderBy(desc(schoolYears.sortYear));
 
   return (
     <div>

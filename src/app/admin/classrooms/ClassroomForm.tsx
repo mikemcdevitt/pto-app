@@ -87,22 +87,23 @@ export default function ClassroomForm({ schoolYears, initialData }: ClassroomFor
     <form onSubmit={handleSubmit} className="max-w-md p-6 space-y-4">
       <div>
         <label className="block text-sm font-medium mb-1">School Year</label>
-        {isEditing ? (
-          <p className="p-2 border rounded bg-gray-50 text-gray-700">
-            {schoolYears.find((y) => y.id === schoolYearId)?.label}
+        <select
+          value={schoolYearId}
+          onChange={(e) => setSchoolYearId(e.target.value)}
+          className="w-full border rounded p-2"
+        >
+          {schoolYears.map((y) => (
+            <option key={y.id} value={y.id}>
+              {y.label}
+            </option>
+          ))}
+        </select>
+        {isEditing && (
+          <p className="text-xs text-gray-500 mt-1">
+            Changing the year doesn&apos;t move any students already assigned
+            to this classroom -- reassign them from the Students page
+            afterward if needed.
           </p>
-        ) : (
-          <select
-            value={schoolYearId}
-            onChange={(e) => setSchoolYearId(e.target.value)}
-            className="w-full border rounded p-2"
-          >
-            {schoolYears.map((y) => (
-              <option key={y.id} value={y.id}>
-                {y.label}
-              </option>
-            ))}
-          </select>
         )}
       </div>
 

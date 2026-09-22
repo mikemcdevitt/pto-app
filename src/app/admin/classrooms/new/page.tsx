@@ -1,10 +1,10 @@
 import { db } from "@/db";
 import { schoolYears } from "@/db/schema";
-import { asc } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import ClassroomForm from "../ClassroomForm";
 
 export default async function NewClassroomPage() {
-  const years = await db.select().from(schoolYears).orderBy(asc(schoolYears.sortYear));
+  const years = await db.select().from(schoolYears).orderBy(desc(schoolYears.sortYear));
 
   return (
     <div>
