@@ -8,9 +8,18 @@
 
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { schoolYears } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { classrooms, schoolYears } from "@/db/schema";
+import { count, eq, sql } from "drizzle-orm";
 import { GRADE_ORDER, GRADE_LABEL } from "@/lib/grades";
+
+// TODO(families): the `families` table exists in the schema (src/db/schema.ts)
+// but nothing populates or links it yet -- no backfill grouping existing
+// parents/students into households, no admin UI to manage them. Until that's
+// done, "how many families are in this grade" can't be a real count, so we
+// estimate it as classrooms-in-that-grade * this constant. Get an updated,
+// real per-grade family count (or better, switch this to
+// count(distinct family) once families are populated) and replace this.
+const PLACEHOLDER_FAMILIES_PER_CLASSROOM = 15;
 
 // Allow the Wix site to fetch this cross-origin. CORS only affects browser
 // fetches, not direct curl access — that's fine here since the response
@@ -69,9 +78,21 @@ export async function GET(request: Request) {
     );
   }
 
-  // Raw SQL for the aggregation: per grade, distinct families with a student
-  // in that grade this school year ("total"), and how many of those families'
-  // emails also appear in `donations` for this campaign ("donating").
+  // Placeholder "total" -- see TODO(families) above. Real classroom counts
+  // per grade this school year, stood in for a real family count.
+  const classroomCounts = await db
+    .select({ grade: classrooms.grade, classroomCount: count() })
+    .from(classrooms)
+    .where(eq(classrooms.schoolYearId, schoolYear.id))
+    .groupBy(classrooms.grade);
+  const classroomCountByGrade = new Map(
+    classroomCounts.map((r) => [r.grade, Number(r.classroomCount)])
+  );
+
+  // "donating": distinct parents in that grade whose email also appears in
+  // `donations` for this campaign. Still parent-based, not family-based --
+  // a family with two donating parents is currently double-counted here.
+  // Revisit alongside the TODO(families) above once families are populated.
   const result = await db.execute(sql`
     with family_grade as (
       select distinct
@@ -86,7 +107,6 @@ export async function GET(request: Request) {
     )
     select
       fg.grade,
-      count(distinct fg.parent_id) as total,
       count(distinct case when d.donor_email is not null then fg.parent_id end) as donating
     from family_grade fg
     left join donations d
@@ -95,16 +115,17 @@ export async function GET(request: Request) {
     group by fg.grade
   `);
 
-  const byGrade = new Map(
-    (result.rows as unknown as { grade: string; total: string; donating: string }[]).map(
-      (r) => [r.grade, r]
-    )
+  const donatingByGrade = new Map(
+    (result.rows as unknown as { grade: string; donating: string }[]).map((r) => [
+      r.grade,
+      Number(r.donating),
+    ])
   );
 
   const grades = GRADE_ORDER.map((grade) => {
-    const r = byGrade.get(grade);
-    const total = r ? Number(r.total) : 0;
-    const donating = r ? Number(r.donating) : 0;
+    const classroomCount = classroomCountByGrade.get(grade) ?? 0;
+    const total = classroomCount * PLACEHOLDER_FAMILIES_PER_CLASSROOM;
+    const donating = donatingByGrade.get(grade) ?? 0;
     return {
       grade,
       label: GRADE_LABEL[grade],

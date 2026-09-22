@@ -87,6 +87,18 @@ export const classrooms = pgTable(
   })
 );
 
+// A household: the group of parents and students who are directly related
+// to each other. Name is optional -- not every family has one on file, and
+// participation counting shouldn't depend on it. A parent or student can
+// belong to at most one family (see family_parents / family_students below,
+// which mirror parent_students' join-table style even though today each
+// side is effectively single-valued, in case a blended-family case ever
+// needs more than one link).
+export const families = pgTable("families", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name"),
+});
+
 export const parents = pgTable("parents", {
   id: uuid("id").defaultRandom().primaryKey(),
   email: text("email").notNull().unique(),
@@ -117,6 +129,36 @@ export const parentStudents = pgTable(
   },
   (table) => ({
     pk: primaryKey({ columns: [table.parentId, table.studentId] }),
+  })
+);
+
+export const familyParents = pgTable(
+  "family_parents",
+  {
+    familyId: uuid("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    parentId: uuid("parent_id")
+      .notNull()
+      .references(() => parents.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.familyId, table.parentId] }),
+  })
+);
+
+export const familyStudents = pgTable(
+  "family_students",
+  {
+    familyId: uuid("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.familyId, table.studentId] }),
   })
 );
 
