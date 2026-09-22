@@ -9,6 +9,14 @@ import type { NextAuthConfig } from "next-auth";
 
 export default {
   providers: [Google],
+  // Explicit JWT sessions: middleware builds its own NextAuth instance
+  // from this config WITHOUT the Drizzle adapter, so it can't look up
+  // database sessions. If strategy is left unset, next-auth infers
+  // "database" here (auth.ts has the adapter) but "jwt" in middleware,
+  // and middleware can never recognize a signed-in session. Pinning both
+  // to "jwt" keeps them consistent; the adapter still handles user/account
+  // records, it just doesn't own the session.
+  session: { strategy: "jwt" },
   callbacks: {
     async signIn({ user }) {
       return Boolean(user.email);
