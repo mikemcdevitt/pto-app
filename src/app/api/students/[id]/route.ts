@@ -1,9 +1,10 @@
 import { auth } from "@/auth";
 import { requireAdmin } from "@/lib/require-admin";
 import { db } from "@/db";
-import { students, studentClassrooms } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { students } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { assignStudentClassroom } from "@/lib/assign-classroom";
 
 export async function GET(
   request: Request,
@@ -44,28 +45,7 @@ export async function PATCH(
   // whatever assignment exists for that year (the admin picked
   // "Unassigned").
   if (body.schoolYearId) {
-    if (body.classroomId) {
-      await db
-        .insert(studentClassrooms)
-        .values({
-          studentId: id,
-          schoolYearId: body.schoolYearId,
-          classroomId: body.classroomId,
-        })
-        .onConflictDoUpdate({
-          target: [studentClassrooms.studentId, studentClassrooms.schoolYearId],
-          set: { classroomId: body.classroomId },
-        });
-    } else {
-      await db
-        .delete(studentClassrooms)
-        .where(
-          and(
-            eq(studentClassrooms.studentId, id),
-            eq(studentClassrooms.schoolYearId, body.schoolYearId)
-          )
-        );
-    }
+    await assignStudentClassroom(id, body.schoolYearId, body.classroomId ?? null);
   }
 
   return NextResponse.json(updated);

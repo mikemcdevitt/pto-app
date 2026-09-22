@@ -38,7 +38,26 @@ export function gradeForCohortInSchoolYear(
   cohortYear: number,
   schoolYearSortYear: number
 ): Grade | null {
+  const status = cohortStatusInSchoolYear(cohortYear, schoolYearSortYear);
+  return status.kind === "grade" ? status.grade : null;
+}
+
+// The richer version of the above: distinguishes *why* a school year
+// doesn't resolve to a grade, for anywhere that wants to explain it to an
+// admin (a roster list, a picklist) rather than just hide the field.
+export type CohortStatus =
+  | { kind: "grade"; grade: Grade }
+  | { kind: "graduated" } // finished 5th grade before this school year
+  | { kind: "not-yet" } // won't start kindergarten until a later year
+  | { kind: "unknown" }; // no cohort year set
+
+export function cohortStatusInSchoolYear(
+  cohortYear: number | null,
+  schoolYearSortYear: number
+): CohortStatus {
+  if (cohortYear == null || Number.isNaN(cohortYear)) return { kind: "unknown" };
   const index = schoolYearSortYear - cohortYear + 5;
-  if (index < 0 || index >= GRADE_ORDER.length) return null;
-  return GRADE_ORDER[index];
+  if (index < 0) return { kind: "graduated" };
+  if (index >= GRADE_ORDER.length) return { kind: "not-yet" };
+  return { kind: "grade", grade: GRADE_ORDER[index] };
 }

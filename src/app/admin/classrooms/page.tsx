@@ -22,6 +22,7 @@ export default async function ClassroomsPage({
   const allClassrooms = await db
     .select({
       id: classrooms.id,
+      schoolYearId: classrooms.schoolYearId,
       grade: classrooms.grade,
       teacherName: classrooms.teacherName,
       abbreviation: classrooms.abbreviation,
@@ -62,7 +63,14 @@ export default async function ClassroomsPage({
               <td className="p-2">{c.schoolYearLabel}</td>
               <td className="p-2 capitalize">{c.grade}</td>
               <td className="p-2">{c.teacherName}</td>
-              <td className="p-2">{c.abbreviation}</td>
+              <td className="p-2">
+                <Link
+                  href={`/admin/students?schoolYearId=${c.schoolYearId}&classroomId=${c.id}`}
+                  className="text-blue-600 hover:underline"
+                >
+                  {c.abbreviation}
+                </Link>
+              </td>
               <td className="p-2">
                 <Link href={`/admin/classrooms/${c.id}`} className="text-blue-600">
                   Edit
