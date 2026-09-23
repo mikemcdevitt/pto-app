@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/require-admin";
 import { db } from "@/db";
-import { parents } from "@/db/schema";
+import { parents, parentStudents } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -26,6 +26,14 @@ export async function POST(request: Request) {
         lastName: body.lastName,
       })
       .returning();
+
+    const studentIds: string[] = body.studentIds ?? [];
+    if (studentIds.length > 0) {
+      await db.insert(parentStudents).values(
+        studentIds.map((studentId) => ({ parentId: created.id, studentId }))
+      );
+    }
+
     return NextResponse.json(created, { status: 201 });
   } catch (err: any) {
     if (err?.code === "23505") {
