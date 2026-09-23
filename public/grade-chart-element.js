@@ -10,21 +10,19 @@
  * No external dependencies (no Chart.js/CDN) — plain SVG, so nothing extra
  * has to load inside Wix's embed.
  *
- * Colors/marks follow the site's dataviz conventions: one hue for a single
- * series (validated categorical slot 1 blue, #2a78d6), <=24px bars, 4px
- * rounded caps square at the baseline, 2px gaps between bars, value labeled
- * on the cap, hover tooltip, muted axis/gridlines.
+ * Compact, coarse-grained layout: at most 6 columns (one per grade K-5), so
+ * there's no need for a fine-grained percentage axis or extra reference
+ * lines — just a baseline, bars, and their labels. Red accent per request.
  */
 (function () {
   const API_URL_ATTR = "api-url";
   const DEFAULT_API_URL = "/api/grade-participation";
 
-  const COLOR_BAR = "#2a78d6";
-  const COLOR_BAR_HOVER = "#1c5cab";
+  const COLOR_BAR = "#c0392b";
+  const COLOR_BAR_HOVER = "#96291d";
   const COLOR_TEXT_PRIMARY = "#0b0b0b";
   const COLOR_TEXT_SECONDARY = "#52514e";
   const COLOR_TEXT_MUTED = "#898781";
-  const COLOR_GRIDLINE = "#e1e0d9";
   const COLOR_BASELINE = "#c3c2b7";
   const COLOR_SURFACE = "#fcfcfb";
 
@@ -58,10 +56,14 @@
     }
 
     render(grades) {
-      const width = 560;
-      const height = 320;
-      const marginTop = 32;
-      const marginBottom = 40;
+      // Compact footprint: shorter and narrower than the original chart,
+      // and no top gridline -- with only up to 6 categories and whole-
+      // percent values, a single baseline is all the reference the reader
+      // needs.
+      const width = 480;
+      const height = 220;
+      const marginTop = 26;
+      const marginBottom = 30;
       const marginLeft = 8;
       const marginRight = 8;
       const chartHeight = height - marginTop - marginBottom;
@@ -70,7 +72,7 @@
       const loadingOrEmpty = !grades || grades.length === 0;
       const n = loadingOrEmpty ? 6 : grades.length;
       const barSlot = chartWidth / n;
-      const barWidth = Math.min(24, barSlot - 8);
+      const barWidth = Math.min(32, barSlot - 8);
       const gap = 2;
 
       const maxPercent = 100;
@@ -93,18 +95,18 @@
                     y="${y}"
                     width="${Math.max(0, barWidth - gap)}"
                     height="${barHeight}"
-                    rx="4"
-                    ry="4"
+                    rx="3"
+                    ry="3"
                     fill="${COLOR_BAR}"
                     class="bar"
                   />
-                  <text x="${x + barWidth / 2}" y="${y - 8}" text-anchor="middle"
-                    font-size="13" font-weight="600" fill="${COLOR_TEXT_PRIMARY}"
+                  <text x="${x + barWidth / 2}" y="${y - 6}" text-anchor="middle"
+                    font-size="12" font-weight="600" fill="${COLOR_TEXT_PRIMARY}"
                     font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
                     ${g.percent}%${leader ? " 🏆" : ""}
                   </text>
-                  <text x="${x + barWidth / 2}" y="${marginTop + chartHeight + 20}" text-anchor="middle"
-                    font-size="13" fill="${COLOR_TEXT_MUTED}"
+                  <text x="${x + barWidth / 2}" y="${marginTop + chartHeight + 16}" text-anchor="middle"
+                    font-size="12" fill="${COLOR_TEXT_MUTED}"
                     font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
                     ${label}
                   </text>
@@ -117,19 +119,19 @@
           .viz-root {
             background: ${COLOR_SURFACE};
             border-radius: 8px;
-            padding: 8px 4px 0;
+            padding: 6px 4px 0;
             font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
           }
           .title {
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 600;
             color: ${COLOR_TEXT_PRIMARY};
-            margin: 4px 4px 2px;
+            margin: 4px 4px 1px;
           }
           .subtitle {
-            font-size: 12px;
+            font-size: 11px;
             color: ${COLOR_TEXT_SECONDARY};
-            margin: 0 4px 8px;
+            margin: 0 4px 6px;
           }
           .bar { transition: fill 0.12s ease; cursor: pointer; }
           .bar-group:hover .bar { fill: ${COLOR_BAR_HOVER}; }
@@ -150,7 +152,7 @@
           .loading {
             font-size: 13px;
             color: ${COLOR_TEXT_MUTED};
-            padding: 40px 0;
+            padding: 24px 0;
             text-align: center;
           }
         </style>
@@ -163,7 +165,6 @@
                 ? `<div class="loading">Loading…</div>`
                 : `<svg viewBox="0 0 ${width} ${height}" width="100%" height="auto" role="img" aria-label="Donation participation percentage by grade">
                     <line x1="${marginLeft}" y1="${marginTop + chartHeight}" x2="${width - marginRight}" y2="${marginTop + chartHeight}" stroke="${COLOR_BASELINE}" stroke-width="1" />
-                    <line x1="${marginLeft}" y1="${marginTop}" x2="${width - marginRight}" y2="${marginTop}" stroke="${COLOR_GRIDLINE}" stroke-width="1" />
                     ${bars}
                   </svg>
                   <div class="tooltip" id="tooltip"></div>`
