@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# raw family-directory exports and parsed output -- real PII, never commit
+/exclude/

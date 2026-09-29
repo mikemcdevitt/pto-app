@@ -12,6 +12,15 @@ import { classrooms, schoolYears } from "@/db/schema";
 import { count, eq, sql } from "drizzle-orm";
 import { GRADE_ORDER, GRADE_LABEL } from "@/lib/grades";
 
+// This route queries the DB directly (no `fetch`), and only touches
+// `request.url` via plain `new URL()` rather than a Next.js dynamic API
+// (request.nextUrl, cookies(), headers()) -- so Next doesn't detect it
+// needs per-request execution and is happy to statically cache it at build
+// time otherwise. Same bug as the admin pages had (see their
+// "force-dynamic" comments): without this, the response can go stale and
+// never reflect new donations/imports until the next deploy.
+export const dynamic = "force-dynamic";
+
 // TODO(families): the `families` table exists in the schema (src/db/schema.ts)
 // but nothing populates or links it yet -- no backfill grouping existing
 // parents/students into households, no admin UI to manage them. Until that's
