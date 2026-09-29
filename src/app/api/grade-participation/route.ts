@@ -8,9 +8,9 @@
 
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { classrooms, schoolYears } from "@/db/schema";
-import { count, eq, sql } from "drizzle-orm";
-import { GRADE_ORDER, GRADE_LABEL } from "@/lib/grades";
+import { classrooms, donations, parents, parentStudents, schoolYears, students } from "@/db/schema";
+import { count, eq } from "drizzle-orm";
+import { GRADE_ORDER, GRADE_LABEL, gradeForCohortInSchoolYear } from "@/lib/grades";
 
 // This route queries the DB directly (no `fetch`), and only touches
 // `request.url` via plain `new URL()` rather than a Next.js dynamic API
@@ -98,43 +98,45 @@ export async function GET(request: Request) {
     classroomCounts.map((r) => [r.grade, Number(r.classroomCount)])
   );
 
-  // "donating": distinct parents in that grade whose email also appears in
-  // `donations` for this campaign. Still parent-based, not family-based --
-  // a family with two donating parents is currently double-counted here.
-  // Revisit alongside the TODO(families) above once families are populated.
-  const result = await db.execute(sql`
-    with family_grade as (
-      select distinct
-        ps.parent_id,
-        p.email,
-        c.grade
-      from parent_students ps
-      join parents p on p.id = ps.parent_id
-      join student_classrooms sc on sc.student_id = ps.student_id
-      join classrooms c on c.id = sc.classroom_id
-      where sc.school_year_id = ${schoolYear.id}
-    )
-    select
-      fg.grade,
-      count(distinct case when d.donor_email is not null then fg.parent_id end) as donating
-    from family_grade fg
-    left join donations d
-      on lower(d.donor_email) = lower(fg.email)
-      and d.wix_campaign_id = ${campaignId}
-    group by fg.grade
-  `);
+  // "donating": distinct parents whose grade is determined by their
+  // student's cohort year (not a classroom assignment), and whose email
+  // also appears in `donations` for this campaign. Cohort-year-based
+  // rather than classroom-based so a student counts as soon as they have a
+  // cohort year on file -- they don't also need a student_classrooms row
+  // for the current year, which a freshly-imported student won't have yet.
+  // Still parent-based, not family-based -- a family with two donating
+  // parents is currently double-counted here. Revisit alongside the
+  // TODO(families) above once there's a real per-grade family count.
+  const links = await db
+    .select({
+      parentId: parentStudents.parentId,
+      email: parents.email,
+      cohortYear: students.cohortYear,
+    })
+    .from(parentStudents)
+    .innerJoin(parents, eq(parents.id, parentStudents.parentId))
+    .innerJoin(students, eq(students.id, parentStudents.studentId));
 
-  const donatingByGrade = new Map(
-    (result.rows as unknown as { grade: string; donating: string }[]).map((r) => [
-      r.grade,
-      Number(r.donating),
-    ])
-  );
+  const campaignDonations = await db
+    .select({ donorEmail: donations.donorEmail })
+    .from(donations)
+    .where(eq(donations.wixCampaignId, campaignId));
+  const donatingEmails = new Set(campaignDonations.map((d) => d.donorEmail.toLowerCase()));
+
+  const donatingByGrade = new Map<string, Set<string>>();
+  for (const link of links) {
+    if (link.cohortYear == null) continue; // no cohort year on file -- can't place them in a grade
+    const grade = gradeForCohortInSchoolYear(link.cohortYear, schoolYear.sortYear);
+    if (!grade) continue; // graduated, or not yet in K-5 as of this school year
+    if (!donatingEmails.has(link.email.toLowerCase())) continue;
+    if (!donatingByGrade.has(grade)) donatingByGrade.set(grade, new Set());
+    donatingByGrade.get(grade)!.add(link.parentId);
+  }
 
   const grades = GRADE_ORDER.map((grade) => {
     const classroomCount = classroomCountByGrade.get(grade) ?? 0;
     const total = classroomCount * PLACEHOLDER_FAMILIES_PER_CLASSROOM;
-    const donating = donatingByGrade.get(grade) ?? 0;
+    const donating = donatingByGrade.get(grade)?.size ?? 0;
     return {
       grade,
       label: GRADE_LABEL[grade],
