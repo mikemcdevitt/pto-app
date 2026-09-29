@@ -8,7 +8,7 @@
 
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { classrooms, donations, parents, parentStudents, schoolYears, students } from "@/db/schema";
+import { classrooms, donations, familyParents, familyStudents, parents, schoolYears, students } from "@/db/schema";
 import { count, eq } from "drizzle-orm";
 import { GRADE_ORDER, GRADE_LABEL, gradeForCohortInSchoolYear } from "@/lib/grades";
 
@@ -98,24 +98,28 @@ export async function GET(request: Request) {
     classroomCounts.map((r) => [r.grade, Number(r.classroomCount)])
   );
 
-  // "donating": distinct parents whose grade is determined by their
-  // student's cohort year (not a classroom assignment), and whose email
-  // also appears in `donations` for this campaign. Cohort-year-based
-  // rather than classroom-based so a student counts as soon as they have a
-  // cohort year on file -- they don't also need a student_classrooms row
-  // for the current year, which a freshly-imported student won't have yet.
-  // Still parent-based, not family-based -- a family with two donating
-  // parents is currently double-counted here. Revisit alongside the
-  // TODO(families) above once there's a real per-grade family count.
-  const links = await db
-    .select({
-      parentId: parentStudents.parentId,
-      email: parents.email,
-      cohortYear: students.cohortYear,
-    })
-    .from(parentStudents)
-    .innerJoin(parents, eq(parents.id, parentStudents.parentId))
-    .innerJoin(students, eq(students.id, parentStudents.studentId));
+  // "donating": distinct FAMILIES with a student in this grade (by cohort
+  // year, not a classroom assignment -- a student counts as soon as they
+  // have a cohort year on file, no student_classrooms row required) where
+  // at least one linked parent's email appears in `donations` for this
+  // campaign. Family-based via family_parents/family_students rather than
+  // parent_students: nothing populates parent_students for bulk-imported
+  // families (see sync-parent-students.ts, which backfills it for the
+  // admin/parent-facing pages that do need it, but this route doesn't
+  // depend on that anymore), while family_parents/family_students are
+  // exactly what the import pipeline writes and what
+  // merge-duplicate-families.ts cleaned up. This also fixes the old
+  // double-counting: a family with two donating parents now counts once
+  // per grade, not once per parent.
+  const familyParentLinks = await db
+    .select({ familyId: familyParents.familyId, email: parents.email })
+    .from(familyParents)
+    .innerJoin(parents, eq(parents.id, familyParents.parentId));
+
+  const familyStudentLinks = await db
+    .select({ familyId: familyStudents.familyId, cohortYear: students.cohortYear })
+    .from(familyStudents)
+    .innerJoin(students, eq(students.id, familyStudents.studentId));
 
   const campaignDonations = await db
     .select({ donorEmail: donations.donorEmail })
@@ -123,14 +127,20 @@ export async function GET(request: Request) {
     .where(eq(donations.wixCampaignId, campaignId));
   const donatingEmails = new Set(campaignDonations.map((d) => d.donorEmail.toLowerCase()));
 
+  const emailsByFamily = new Map<string, string[]>();
+  for (const link of familyParentLinks) {
+    emailsByFamily.set(link.familyId, [...(emailsByFamily.get(link.familyId) ?? []), link.email.toLowerCase()]);
+  }
+
   const donatingByGrade = new Map<string, Set<string>>();
-  for (const link of links) {
+  for (const link of familyStudentLinks) {
     if (link.cohortYear == null) continue; // no cohort year on file -- can't place them in a grade
     const grade = gradeForCohortInSchoolYear(link.cohortYear, schoolYear.sortYear);
     if (!grade) continue; // graduated, or not yet in K-5 as of this school year
-    if (!donatingEmails.has(link.email.toLowerCase())) continue;
+    const familyEmails = emailsByFamily.get(link.familyId) ?? [];
+    if (!familyEmails.some((e) => donatingEmails.has(e))) continue;
     if (!donatingByGrade.has(grade)) donatingByGrade.set(grade, new Set());
-    donatingByGrade.get(grade)!.add(link.parentId);
+    donatingByGrade.get(grade)!.add(link.familyId);
   }
 
   const grades = GRADE_ORDER.map((grade) => {

@@ -34,6 +34,10 @@
  *   into student_classrooms for the staged school year (looked up from the
  *   staged file's `sourceSchoolYear`). A "not_found" classroom is left
  *   unlinked -- create it via the admin page and re-stage/re-import.
+ * - Every parent in a family is linked to every student in that family via
+ *   parent_students (not just family-level family_parents/family_students),
+ *   using onConflictDoNothing so it's safe alongside any links already
+ *   created by hand via the admin Add/Edit Parent pages.
  * - students.preferred_name doesn't exist as a column -- any preferredName
  *   in the import is reported as dropped, not silently lost.
  *
@@ -61,6 +65,7 @@ import {
   families,
   familyParents,
   familyStudents,
+  parentStudents,
   schoolYears,
   studentClassrooms,
 } from "../src/db/schema";
@@ -174,6 +179,7 @@ async function main() {
   let cohortYearsUpdated = 0;
   let classroomsLinked = 0;
   let classroomsNotFound = 0;
+  let parentStudentLinksCreated = 0;
   const errors: string[] = [];
 
   for (const [i, family] of staged.entries()) {
@@ -284,6 +290,14 @@ async function main() {
         continue;
       }
 
+      // Counted here (not just in the commit branch below) so a dry run
+      // also previews this -- an approximate "would attempt" count, since
+      // it isn't checked against already-existing links or deduplicated
+      // the way onConflictDoNothing does for a real write.
+      if (parentIds.length > 0 && studentIds.length > 0) {
+        parentStudentLinksCreated += parentIds.length * studentIds.length;
+      }
+
       if (!commit) {
         familiesCreated++;
         continue;
@@ -295,6 +309,10 @@ async function main() {
       }
       if (studentIds.length > 0) {
         await db.insert(familyStudents).values(studentIds.map((studentId) => ({ familyId: newFamily.id, studentId })));
+      }
+      if (parentIds.length > 0 && studentIds.length > 0) {
+        const pairs = parentIds.flatMap((parentId) => studentIds.map((studentId) => ({ parentId, studentId })));
+        await db.insert(parentStudents).values(pairs).onConflictDoNothing();
       }
       familiesCreated++;
     } catch (err) {
@@ -319,6 +337,11 @@ async function main() {
   if (classroomsNotFound > 0) {
     console.log(
       `${classroomsNotFound} student(s) have a homeroom with no matching classroom on file -- left unlinked (see stage-family-import.ts's issue list).`
+    );
+  }
+  if (parentStudentLinksCreated > 0) {
+    console.log(
+      `${commit ? "Created (or already on file)" : "Would attempt"} ${parentStudentLinksCreated} parent_students link(s) -- onConflictDoNothing means the real number written may be lower if some already existed.`
     );
   }
   if (preferredNamesDropped > 0) {
