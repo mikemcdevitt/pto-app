@@ -8,7 +8,7 @@
 
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { classrooms, donations, familyParents, familyStudents, parents, schoolYears, students } from "@/db/schema";
+import { classrooms, donations, familyParents, familyStudents, parentEmails, schoolYears, students } from "@/db/schema";
 import { count, eq } from "drizzle-orm";
 import { GRADE_ORDER, GRADE_LABEL, gradeForCohortInSchoolYear } from "@/lib/grades";
 
@@ -100,8 +100,12 @@ export async function GET(request: Request) {
   // "donating": distinct FAMILIES with a student in this grade (by cohort
   // year, not a classroom assignment -- a student counts as soon as they
   // have a cohort year on file, no student_classrooms row required) where
-  // at least one linked parent's email appears in `donations` for this
-  // campaign. Family-based via family_parents/family_students rather than
+  // ANY of a linked parent's emails -- primary or additional, via
+  // parent_emails rather than parents.email -- appears in `donations` for
+  // this campaign. parent_emails always has a row for a parent's primary
+  // email too (kept in sync by the parent create/edit routes), so this
+  // one join covers every address without also joining `parents`.
+  // Family-based via family_parents/family_students rather than
   // parent_students: nothing populates parent_students for bulk-imported
   // families (see sync-parent-students.ts, which backfills it for the
   // admin/parent-facing pages that do need it, but this route doesn't
@@ -111,9 +115,9 @@ export async function GET(request: Request) {
   // double-counting: a family with two donating parents now counts once
   // per grade, not once per parent.
   const familyParentLinks = await db
-    .select({ familyId: familyParents.familyId, email: parents.email })
+    .select({ familyId: familyParents.familyId, email: parentEmails.email })
     .from(familyParents)
-    .innerJoin(parents, eq(parents.id, familyParents.parentId));
+    .innerJoin(parentEmails, eq(parentEmails.parentId, familyParents.parentId));
 
   const familyStudentLinks = await db
     .select({ familyId: familyStudents.familyId, cohortYear: students.cohortYear })
