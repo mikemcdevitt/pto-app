@@ -9,6 +9,11 @@ interface StudentOption {
   lastName: string;
 }
 
+interface EmailEntry {
+  email: string;
+  isPrimary: boolean;
+}
+
 interface ParentFormProps {
   allStudents: StudentOption[];
   initialData?: {
@@ -17,6 +22,7 @@ interface ParentFormProps {
     firstName: string;
     lastName: string;
     studentIds: string[];
+    emails: EmailEntry[];
   };
 }
 
@@ -30,7 +36,9 @@ export default function ParentForm({ allStudents, initialData }: ParentFormProps
   const router = useRouter();
   const isEditing = Boolean(initialData);
 
-  const [email, setEmail] = useState(initialData?.email ?? "");
+  const [emails, setEmails] = useState<EmailEntry[]>(
+    initialData?.emails ?? [{ email: "", isPrimary: true }]
+  );
   const [firstName, setFirstName] = useState(initialData?.firstName ?? "");
   const [lastName, setLastName] = useState(initialData?.lastName ?? "");
   const [studentIds, setStudentIds] = useState<string[]>(initialData?.studentIds ?? []);
@@ -46,6 +54,22 @@ export default function ParentForm({ allStudents, initialData }: ParentFormProps
   const [newStudentFirstName, setNewStudentFirstName] = useState("");
   const [newStudentLastName, setNewStudentLastName] = useState("");
   const [newStudentCohortYear, setNewStudentCohortYear] = useState("");
+
+  function updateEmailValue(index: number, value: string) {
+    setEmails((prev) => prev.map((e, i) => (i === index ? { ...e, email: value } : e)));
+  }
+
+  function setPrimaryEmail(index: number) {
+    setEmails((prev) => prev.map((e, i) => ({ ...e, isPrimary: i === index })));
+  }
+
+  function addEmailField() {
+    setEmails((prev) => [...prev, { email: "", isPrimary: false }]);
+  }
+
+  function removeEmailField(index: number) {
+    setEmails((prev) => prev.filter((_, i) => i !== index));
+  }
 
   function toggleStudent(id: string) {
     setStudentIds((prev) =>
@@ -74,8 +98,28 @@ export default function ParentForm({ allStudents, initialData }: ParentFormProps
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitting(true);
     setError(null);
+
+    const trimmedEmails = emails
+      .map((entry) => ({ ...entry, email: entry.email.trim() }))
+      .filter((entry) => entry.email !== "");
+    const primary = trimmedEmails.find((entry) => entry.isPrimary);
+    if (!primary) {
+      setError("Pick a primary email.");
+      return;
+    }
+    const seen = new Set<string>();
+    for (const entry of trimmedEmails) {
+      const key = entry.email.toLowerCase();
+      if (seen.has(key)) {
+        setError(`"${entry.email}" is listed more than once.`);
+        return;
+      }
+      seen.add(key);
+    }
+    const additionalEmails = trimmedEmails.filter((entry) => !entry.isPrimary).map((entry) => entry.email);
+
+    setSubmitting(true);
 
     // Create any staged new students first, so their ids can be included
     // in the same studentIds list sent below. If one fails partway
@@ -112,7 +156,13 @@ export default function ParentForm({ allStudents, initialData }: ParentFormProps
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, firstName, lastName, studentIds: allStudentIds }),
+      body: JSON.stringify({
+        email: primary.email,
+        additionalEmails,
+        firstName,
+        lastName,
+        studentIds: allStudentIds,
+      }),
     });
 
     if (!res.ok) {
@@ -144,14 +194,47 @@ export default function ParentForm({ allStudents, initialData }: ParentFormProps
   return (
     <form onSubmit={handleSubmit} className="max-w-md p-6 space-y-4">
       <div>
-        <label className="block text-sm font-medium mb-1">Email</label>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          className="w-full border rounded p-2"
-        />
+        <label className="block text-sm font-medium mb-1">Emails</label>
+        <div className="space-y-2">
+          {emails.map((entry, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="primaryEmail"
+                checked={entry.isPrimary}
+                onChange={() => setPrimaryEmail(i)}
+                aria-label="Primary email"
+              />
+              <input
+                type="email"
+                value={entry.email}
+                onChange={(e) => updateEmailValue(i, e.target.value)}
+                placeholder="parent@example.com"
+                required={entry.isPrimary}
+                className="flex-1 border rounded p-2"
+              />
+              {!entry.isPrimary && (
+                <button
+                  type="button"
+                  onClick={() => removeEmailField(i)}
+                  className="text-red-600 text-xs"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={addEmailField}
+          className="mt-2 px-3 py-1 border rounded text-sm"
+        >
+          Add email
+        </button>
+        <p className="text-xs text-gray-500 mt-1">
+          The selected radio is the primary email -- used for donation matching and as the main contact address.
+        </p>
       </div>
       <div>
         <label className="block text-sm font-medium mb-1">First Name</label>

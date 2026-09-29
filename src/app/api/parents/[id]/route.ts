@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/require-admin";
 import { db } from "@/db";
-import { parents, parentStudents, students } from "@/db/schema";
+import { parents, parentStudents, parentEmails, students } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -37,11 +37,20 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json();
 
+  const primaryEmail = body.email.toLowerCase().trim();
+  const additionalEmails = Array.from(
+    new Set(
+      ((body.additionalEmails ?? []) as string[])
+        .map((e) => e.toLowerCase().trim())
+        .filter((e) => e !== "" && e !== primaryEmail)
+    )
+  );
+
   try {
     const [updated] = await db
       .update(parents)
       .set({
-        email: body.email.toLowerCase().trim(),
+        email: primaryEmail,
         firstName: body.firstName,
         lastName: body.lastName,
       })
@@ -59,10 +68,23 @@ export async function PATCH(
       );
     }
 
+    // Sync parent_emails the same way: wipe and reinsert, mirroring the
+    // primary in alongside any additional ones so parent_emails always has
+    // a row for every email that resolves to this parent (see the schema
+    // comment on parent_emails). Not atomic with the parents.email update
+    // above -- neon-http doesn't support transactions -- so a conflict here
+    // (someone else already has one of these emails) can leave parents.email
+    // changed with parent_emails not yet caught up; re-saving fixes it.
+    await db.delete(parentEmails).where(eq(parentEmails.parentId, id));
+    await db.insert(parentEmails).values([
+      { parentId: id, email: primaryEmail, isPrimary: true },
+      ...additionalEmails.map((email) => ({ parentId: id, email, isPrimary: false })),
+    ]);
+
     return NextResponse.json(updated);
   } catch (err: any) {
     if (err?.code === "23505") {
-      return NextResponse.json({ error: "That email is already in use." }, { status: 409 });
+      return NextResponse.json({ error: "One of these emails is already in use by another parent." }, { status: 409 });
     }
     console.error(err);
     return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
