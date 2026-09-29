@@ -21,13 +21,12 @@ import { GRADE_ORDER, GRADE_LABEL, gradeForCohortInSchoolYear } from "@/lib/grad
 // never reflect new donations/imports until the next deploy.
 export const dynamic = "force-dynamic";
 
-// TODO(families): the `families` table exists in the schema (src/db/schema.ts)
-// but nothing populates or links it yet -- no backfill grouping existing
-// parents/students into households, no admin UI to manage them. Until that's
-// done, "how many families are in this grade" can't be a real count, so we
-// estimate it as classrooms-in-that-grade * this constant. Get an updated,
-// real per-grade family count (or better, switch this to
-// count(distinct family) once families are populated) and replace this.
+// Kindergarten alone still falls back to this placeholder estimate --
+// classrooms-in-that-grade * this constant -- since KG enrollment is
+// still catching up in the system (new families who haven't been
+// entered yet would make a real KG family count understate the true
+// denominator). Every other grade's total is a real, live distinct
+// family count -- see familyCountByGrade below.
 const PLACEHOLDER_FAMILIES_PER_CLASSROOM = 15;
 
 // Allow the Wix site to fetch this cross-origin. CORS only affects browser
@@ -132,11 +131,21 @@ export async function GET(request: Request) {
     emailsByFamily.set(link.familyId, [...(emailsByFamily.get(link.familyId) ?? []), link.email.toLowerCase()]);
   }
 
+  // familyCountByGrade: every distinct family with a student in that
+  // grade (regardless of whether they've donated) -- the real
+  // denominator for grades other than kindergarten, computed from the
+  // same family_students/students join as "donating" above rather than
+  // a second query.
   const donatingByGrade = new Map<string, Set<string>>();
+  const familyCountByGrade = new Map<string, Set<string>>();
   for (const link of familyStudentLinks) {
     if (link.cohortYear == null) continue; // no cohort year on file -- can't place them in a grade
     const grade = gradeForCohortInSchoolYear(link.cohortYear, schoolYear.sortYear);
     if (!grade) continue; // graduated, or not yet in K-5 as of this school year
+
+    if (!familyCountByGrade.has(grade)) familyCountByGrade.set(grade, new Set());
+    familyCountByGrade.get(grade)!.add(link.familyId);
+
     const familyEmails = emailsByFamily.get(link.familyId) ?? [];
     if (!familyEmails.some((e) => donatingEmails.has(e))) continue;
     if (!donatingByGrade.has(grade)) donatingByGrade.set(grade, new Set());
@@ -145,7 +154,10 @@ export async function GET(request: Request) {
 
   const grades = GRADE_ORDER.map((grade) => {
     const classroomCount = classroomCountByGrade.get(grade) ?? 0;
-    const total = classroomCount * PLACEHOLDER_FAMILIES_PER_CLASSROOM;
+    const total =
+      grade === "kindergarten"
+        ? classroomCount * PLACEHOLDER_FAMILIES_PER_CLASSROOM
+        : familyCountByGrade.get(grade)?.size ?? 0;
     const donating = donatingByGrade.get(grade)?.size ?? 0;
     return {
       grade,
