@@ -8,6 +8,13 @@
       "when": 1788632749880,
       "tag": "0000_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790716051470,
+      "tag": "0001_add_parent_emails",
+      "breakpoints": true
     }
   ]
 }

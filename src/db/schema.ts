@@ -3,11 +3,14 @@ import {
   uuid,
   text,
   integer,
+  boolean,
   pgEnum,
   primaryKey,
   unique,
+  uniqueIndex,
   timestamp,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import type { AdapterAccountType } from "next-auth/adapters";
 
 export const gradeEnum = pgEnum("grade", [
@@ -105,6 +108,33 @@ export const parents = pgTable("parents", {
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
 });
+
+// A parent can have more than one email on file (a personal address and a
+// work address, say). parents.email stays the single "primary" email --
+// the one everything that needs to resolve a parent to exactly one
+// address still uses (donation matching, the family-import upsert) -- and
+// is kept in sync with the row here where is_primary is true. Nothing
+// reads secondary emails yet; this just gives us somewhere to put them.
+export const parentEmails = pgTable(
+  "parent_emails",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    parentId: uuid("parent_id")
+      .notNull()
+      .references(() => parents.id, { onDelete: "cascade" }),
+    email: text("email").notNull().unique(),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    // At most one row per parent can be marked primary. (Zero is allowed --
+    // e.g. transiently mid-edit -- but the app is expected to always keep
+    // exactly one in sync with parents.email.)
+    onePrimaryPerParent: uniqueIndex("one_primary_email_per_parent")
+      .on(table.parentId)
+      .where(sql`${table.isPrimary}`),
+  })
+);
 
 export const students = pgTable("students", {
   id: uuid("id").defaultRandom().primaryKey(),
