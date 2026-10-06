@@ -1,6 +1,8 @@
 // Pulls Wix donation orders (for the Annual Appeal campaign) created since the
 // last synced order, and upserts them into the `donations` table. Scheduled
-// via vercel.json (every 30 min during the campaign).
+// via the "Sync Wix donations" GitHub Action (.github/workflows/sync-wix-donations.yml,
+// every 30 min) -- there's no vercel.json in this project, so that Action is
+// the only thing calling this on a schedule.
 //
 // Trigger manually while testing with:
 //   curl -H "Authorization: Bearer $CRON_SECRET" https://<domain>/api/cron/sync-wix-donations
