@@ -61,3 +61,31 @@ export function cohortStatusInSchoolYear(
   if (index >= GRADE_ORDER.length) return { kind: "not-yet" };
   return { kind: "grade", grade: GRADE_ORDER[index] };
 }
+
+// Turns loosely-formatted grade text from an external roster export (a
+// bulk-update paste/CSV, say) into our Grade enum -- "Grade 2", "Gr 2",
+// "2nd Grade", "2nd", and bare "2" (or "K"/"Kindergarten"/"Kinder") all
+// resolve to the same grade. Returns null for anything that doesn't match
+// a known form, so the caller can flag it rather than guess.
+const GRADE_ALIASES: Record<Grade, string[]> = {
+  kindergarten: ["k", "kindergarten", "kinder", "0"],
+  first: ["1", "1st", "first"],
+  second: ["2", "2nd", "second"],
+  third: ["3", "3rd", "third"],
+  fourth: ["4", "4th", "fourth"],
+  fifth: ["5", "5th", "fifth"],
+};
+
+export function parseGradeLabel(raw: string): Grade | null {
+  const normalized = raw
+    .trim()
+    .toLowerCase()
+    .replace(/^grade\s*/, "")
+    .replace(/\s*grade$/, "")
+    .replace(/^gr\.?\s*/, "")
+    .trim();
+  for (const grade of GRADE_ORDER) {
+    if (GRADE_ALIASES[grade].includes(normalized)) return grade;
+  }
+  return null;
+}
