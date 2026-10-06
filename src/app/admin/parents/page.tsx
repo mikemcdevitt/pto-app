@@ -18,9 +18,14 @@ export default async function ParentsPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Parents</h1>
-        <Link href="/admin/parents/new" className="px-4 py-2 bg-blue-600 text-white rounded">
-          Add Parent
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/admin/parents/bulk-update" className="px-4 py-2 border rounded">
+            Bulk Update
+          </Link>
+          <Link href="/admin/parents/new" className="px-4 py-2 bg-blue-600 text-white rounded">
+            Add Parent
+          </Link>
+        </div>
       </div>
       <table className="w-full border-collapse">
         <thead>
