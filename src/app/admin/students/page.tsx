@@ -17,12 +17,15 @@ export const dynamic = "force-dynamic";
 // than a separate route. ?schoolYearId picks the year (defaults to the
 // most recent), ?grade filters to one grade, and ?classroomId (set by the
 // Abbreviation link on the Classrooms page) narrows to one class's roster.
+const SORT_OPTIONS = ["grade", "classroom", "name"] as const;
+type SortMode = (typeof SORT_OPTIONS)[number];
+
 export default async function StudentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ schoolYearId?: string; grade?: string; classroomId?: string }>;
+  searchParams: Promise<{ schoolYearId?: string; grade?: string; classroomId?: string; sort?: string }>;
 }) {
-  const { schoolYearId, grade: gradeParam, classroomId: classroomIdParam } = await searchParams;
+  const { schoolYearId, grade: gradeParam, classroomId: classroomIdParam, sort: sortParam } = await searchParams;
 
   const years = await db.select().from(schoolYears).orderBy(desc(schoolYears.sortYear));
 
@@ -44,6 +47,10 @@ export default async function StudentsPage({
       ? (gradeParam as Grade)
       : null;
 
+  const sortMode: SortMode = (SORT_OPTIONS as readonly string[]).includes(sortParam ?? "")
+    ? (sortParam as SortMode)
+    : "grade";
+
   const classroomsForYear = await db
     .select({
       id: classrooms.id,
@@ -62,6 +69,7 @@ export default async function StudentsPage({
     },
     {}
   );
+  const classroomInfoById = new Map(classroomsForYear.map((c) => [c.id, c]));
 
   const classroomFilter = classroomIdParam
     ? classroomsForYear.find((c) => c.id === classroomIdParam) ?? null
@@ -89,6 +97,8 @@ export default async function StudentsPage({
   // whose cohort doesn't resolve to a grade this year, least-actionable
   // last: upcoming cohorts, then graduated, then missing data entirely
   // (most in need of a fix, but not part of any current-year roster).
+  // This is the default ("grade") sort; "name" and "classroom" below are
+  // the other two choices from the Sort dropdown.
   const sortIndex = (status: CohortStatus) =>
     status.kind === "grade"
       ? GRADE_ORDER.indexOf(status.grade)
@@ -97,6 +107,9 @@ export default async function StudentsPage({
         : status.kind === "graduated"
           ? 7
           : 8;
+
+  const nameCompare = (a: { firstName: string; lastName: string }, b: { firstName: string; lastName: string }) =>
+    `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`);
 
   const rosterStudents = rows
     .map((r) => ({
@@ -109,9 +122,29 @@ export default async function StudentsPage({
     .filter((s) => (gradeFilter ? s.status.kind === "grade" && s.status.grade === gradeFilter : true))
     .filter((s) => (classroomFilter ? s.classroomId === classroomFilter.id : true))
     .sort((a, b) => {
+      if (sortMode === "name") {
+        return nameCompare(a, b);
+      }
+
+      if (sortMode === "classroom") {
+        const classroomA = a.classroomId ? classroomInfoById.get(a.classroomId) : undefined;
+        const classroomB = b.classroomId ? classroomInfoById.get(b.classroomId) : undefined;
+        // Unassigned (or a leftover classroomId from a different year)
+        // sorts after every student with a real classroom this year.
+        if (classroomA && !classroomB) return -1;
+        if (!classroomA && classroomB) return 1;
+        if (classroomA && classroomB) {
+          const gradeDiff = GRADE_ORDER.indexOf(classroomA.grade) - GRADE_ORDER.indexOf(classroomB.grade);
+          if (gradeDiff !== 0) return gradeDiff;
+          const abbrDiff = classroomA.abbreviation.localeCompare(classroomB.abbreviation);
+          if (abbrDiff !== 0) return abbrDiff;
+        }
+        return nameCompare(a, b);
+      }
+
       const diff = sortIndex(a.status) - sortIndex(b.status);
       if (diff !== 0) return diff;
-      return `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`);
+      return nameCompare(a, b);
     });
 
   return (
@@ -127,6 +160,7 @@ export default async function StudentsPage({
         schoolYears={years}
         selectedSchoolYearId={selectedYear.id}
         selectedGrade={gradeFilter ?? undefined}
+        selectedSort={sortMode}
       />
 
       {classroomFilter && (
