@@ -33,6 +33,14 @@ interface Override {
 // the values. Detects tab vs. comma per line (Excel paste is
 // tab-separated; a .csv file is comma-separated) and skips a
 // "First Name, Last Name, ..." header row if one is present.
+//
+// A roster export often lists the same parent once per child, so once
+// rows are split out, duplicates -- same email, first name, and last
+// name (case-insensitive) -- are collapsed to one before matching ever
+// sees them. Otherwise an unchanged parent would show up as several
+// identical "already up to date" rows, and a brand-new one as several
+// separate "create" candidates that'd try to insert the same parent
+// (and email) more than once.
 function parseRows(text: string): RawRow[] {
   const lines = text
     .split(/\r?\n/)
@@ -52,15 +60,20 @@ function parseRows(text: string): RawRow[] {
     }
   }
 
-  return dataLines.map((line, i) => {
+  const seen = new Set<string>();
+  const deduped: { firstName: string; lastName: string; email: string }[] = [];
+  for (const line of dataLines) {
     const cells = splitLine(line);
-    return {
-      rowIndex: i,
-      firstName: cells[0] ?? "",
-      lastName: cells[1] ?? "",
-      email: cells[2] ?? "",
-    };
-  });
+    const firstName = cells[0] ?? "";
+    const lastName = cells[1] ?? "";
+    const email = cells[2] ?? "";
+    const key = `${email.trim().toLowerCase()}|${firstName.trim().toLowerCase()}|${lastName.trim().toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push({ firstName, lastName, email });
+  }
+
+  return deduped.map((row, i) => ({ rowIndex: i, ...row }));
 }
 
 export default function BulkUpdateForm() {
