@@ -21,12 +21,17 @@ import { GRADE_ORDER, GRADE_LABEL, gradeForCohortInSchoolYear } from "@/lib/grad
 // never reflect new donations/imports until the next deploy.
 export const dynamic = "force-dynamic";
 
-// Kindergarten alone still falls back to this placeholder estimate --
-// classrooms-in-that-grade * this constant -- since KG enrollment is
-// still catching up in the system (new families who haven't been
-// entered yet would make a real KG family count understate the true
-// denominator). Every other grade's total is a real, live distinct
-// family count -- see familyCountByGrade below.
+// Kindergarten used to fall back to a placeholder estimate --
+// classrooms-in-that-grade * PLACEHOLDER_FAMILIES_PER_CLASSROOM -- for
+// when KG enrollment was still catching up in the system (new families
+// who hadn't been entered yet would make a real KG family count
+// understate the true denominator). KG family data is solid now, so
+// this is switched off (USE_KINDERGARTEN_PLACEHOLDER = false) and every
+// grade uses the same real, live distinct family count --
+// see familyCountByGrade below. Left in, rather than deleted, in case a
+// future year starts KG enrollment again before the roster is caught up
+// -- flip the flag back to true to fall back to the estimate again.
+const USE_KINDERGARTEN_PLACEHOLDER = false;
 const PLACEHOLDER_FAMILIES_PER_CLASSROOM = 15;
 
 // Allow the Wix site to fetch this cross-origin. CORS only affects browser
@@ -159,7 +164,7 @@ export async function GET(request: Request) {
   const grades = GRADE_ORDER.map((grade) => {
     const classroomCount = classroomCountByGrade.get(grade) ?? 0;
     const total =
-      grade === "kindergarten"
+      grade === "kindergarten" && USE_KINDERGARTEN_PLACEHOLDER
         ? classroomCount * PLACEHOLDER_FAMILIES_PER_CLASSROOM
         : familyCountByGrade.get(grade)?.size ?? 0;
     const donating = donatingByGrade.get(grade)?.size ?? 0;
