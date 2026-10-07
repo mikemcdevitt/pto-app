@@ -17,6 +17,10 @@ export default function AdminHomePage() {
           <p className="font-semibold text-lg">Students</p>
           <p className="text-sm text-gray-600 mt-1">Manage student records.</p>
         </Link>
+        <Link href="/admin/families/bulk-update" className="border rounded-lg p-4 shadow-sm hover:bg-gray-50">
+          <p className="font-semibold text-lg">Families</p>
+          <p className="text-sm text-gray-600 mt-1">Bulk-link students and parents into families.</p>
+        </Link>
       </div>
     </div>
   );

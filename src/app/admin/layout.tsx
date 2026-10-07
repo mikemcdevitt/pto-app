@@ -10,6 +10,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <Link href="/admin/classrooms">Classrooms</Link>
           <Link href="/admin/parents">Parents</Link>
           <Link href="/admin/students">Students</Link>
+          <Link href="/admin/families/bulk-update">Families</Link>
         </div>
         <form
           action={async () => {
