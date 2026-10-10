@@ -1,17 +1,12 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-
-const adminEmails = (process.env.ADMIN_EMAILS ?? "")
-  .split(",")
-  .map((e) => e.trim().toLowerCase())
-  .filter(Boolean);
+import { hasFundraisingAccess, isAdminEmail } from "@/lib/access-lists";
 
 // For API route handlers: returns the session, or null so the route can
 // respond 401 itself.
 export async function requireAdmin() {
   const session = await auth();
-  const email = session?.user?.email?.toLowerCase();
-  if (!email || !adminEmails.includes(email)) {
+  if (!isAdminEmail(session?.user?.email)) {
     return null;
   }
   return session;
@@ -27,6 +22,22 @@ export async function requireAdmin() {
 // authentication guide).
 export async function requireAdminPage() {
   const session = await requireAdmin();
+  if (!session) redirect("/sign-in?error=unauthorized");
+  return session;
+}
+
+// Fundraising pages and APIs: admins plus FUNDRAISING_EMAILS (see
+// src/lib/access-lists.ts). Same null-vs-redirect split as above.
+export async function requireFundraising() {
+  const session = await auth();
+  if (!hasFundraisingAccess(session?.user?.email)) {
+    return null;
+  }
+  return session;
+}
+
+export async function requireFundraisingPage() {
+  const session = await requireFundraising();
   if (!session) redirect("/sign-in?error=unauthorized");
   return session;
 }

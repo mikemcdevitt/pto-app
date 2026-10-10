@@ -3,11 +3,7 @@ import { db } from "@/db";
 import { parents } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
-
-const adminEmails = (process.env.ADMIN_EMAILS ?? "")
-  .split(",")
-  .map((e) => e.trim().toLowerCase())
-  .filter(Boolean);
+import { hasFundraisingAccess, isAdminEmail } from "@/lib/access-lists";
 
 export default async function PostSignInPage() {
   const session = await auth();
@@ -15,8 +11,12 @@ export default async function PostSignInPage() {
 
   if (!email) redirect("/sign-in");
 
-  if (adminEmails.includes(email)) {
+  if (isAdminEmail(email)) {
     redirect("/admin");
+  }
+
+  if (hasFundraisingAccess(email)) {
+    redirect("/admin/fundraising");
   }
 
   const [parent] = await db

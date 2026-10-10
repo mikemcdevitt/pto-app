@@ -23,6 +23,10 @@ export default async function AdminHomePage() {
           <p className="font-semibold text-lg">Families</p>
           <p className="text-sm text-gray-600 mt-1">See family groupings of parents and students.</p>
         </Link>
+        <Link href="/admin/fundraising" className="border rounded-lg p-4 shadow-sm hover:bg-gray-50">
+          <p className="font-semibold text-lg">Fundraising</p>
+          <p className="text-sm text-gray-600 mt-1">Partner businesses, their contacts, and outreach history.</p>
+        </Link>
       </div>
     </div>
   );
