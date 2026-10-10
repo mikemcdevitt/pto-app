@@ -45,6 +45,23 @@ function withCors(res: NextResponse) {
   return res;
 }
 
+// Let Vercel's CDN serve this from cache for 60s (then up to 5 more
+// minutes stale while it refreshes in the background), so the database
+// is queried at most about once a minute per region no matter how often
+// the endpoint is hit -- it's public and unauthenticated, and each miss
+// runs several full-table queries. Only applied to successful responses;
+// Vercel never caches the 500s below anyway. Donations only sync every
+// 30 minutes, so a minute of staleness is invisible. Vercel strips
+// s-maxage/stale-while-revalidate before the browser sees this header.
+// force-dynamic (above) is still needed: it stops Next from baking the
+// response in at build time, while this header handles the CDN caching.
+const CDN_CACHE_CONTROL = "public, s-maxage=60, stale-while-revalidate=300";
+
+function cached(res: NextResponse) {
+  res.headers.set("Cache-Control", CDN_CACHE_CONTROL);
+  return res;
+}
+
 export async function OPTIONS() {
   return withCors(new NextResponse(null, { status: 204 }));
 }
@@ -64,7 +81,7 @@ export async function GET(request: Request) {
         percent: Math.round((donating / total) * 100),
       };
     });
-    return withCors(NextResponse.json({ grades: mock, mock: true }));
+    return withCors(cached(NextResponse.json({ grades: mock, mock: true })));
   }
 
   const schoolYearLabel = process.env.CURRENT_SCHOOL_YEAR_LABEL;
@@ -177,5 +194,5 @@ export async function GET(request: Request) {
     };
   });
 
-  return withCors(NextResponse.json({ grades, mock: false }));
+  return withCors(cached(NextResponse.json({ grades, mock: false })));
 }
