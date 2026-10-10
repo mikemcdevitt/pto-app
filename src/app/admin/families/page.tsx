@@ -3,6 +3,7 @@ import { families, familyParents, familyStudents, parents, students } from "@/db
 import { eq } from "drizzle-orm";
 import Link from "next/link";
 import FamiliesList from "./FamiliesList";
+import { requireAdminPage } from "@/lib/require-admin";
 
 // Always hit the database on request; this route has no dynamic
 // function calls (no auth()/cookies()/searchParams), so Next.js would
@@ -12,6 +13,7 @@ import FamiliesList from "./FamiliesList";
 export const dynamic = "force-dynamic";
 
 export default async function FamiliesPage() {
+  await requireAdminPage();
   const [allFamilies, parentLinks, studentLinks] = await Promise.all([
     db.select({ id: families.id, name: families.name }).from(families),
     db

@@ -19,12 +19,16 @@ import { desc, eq, sql } from "drizzle-orm";
 const CAMPAIGN_OPENED_AT = "2026-09-01T00:00:00.000Z";
 
 export async function GET(request: Request) {
-  // Vercel Cron sends its own auth; this also allows a manual test trigger.
+  // Fails closed: if CRON_SECRET isn't configured, refuse every request
+  // rather than skipping the check -- otherwise a missing env var would
+  // leave this route open to anyone. The GitHub Action (and a manual
+  // curl test) sends the secret as a bearer token.
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    return NextResponse.json({ error: "CRON_SECRET is not configured" }, { status: 500 });
+  }
   const authHeader = request.headers.get("authorization");
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
+  if (authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

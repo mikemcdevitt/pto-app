@@ -7,6 +7,11 @@ on:
     - cron: "*/30 * * * *"
   workflow_dispatch: {} # lets you trigger it manually from the Actions tab
 
+# The job only runs curl against the app, so the GITHUB_TOKEN gets no
+# permissions at all. Note: Actions logs are public on a public repo --
+# keep the sync endpoint's response free of names/emails.
+permissions: {}
+
 jobs:
   sync:
     runs-on: ubuntu-latest

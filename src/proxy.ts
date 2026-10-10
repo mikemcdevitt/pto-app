@@ -3,8 +3,11 @@ import { NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
 import authConfig from "@/auth.config";
 
-// Edge Middleware needs its own NextAuth instance built from the edge-safe
-// config only (no adapter, no Nodemailer) — see src/auth.config.ts for why.
+// Next.js 16 "proxy" (formerly middleware.ts -- same behavior, renamed
+// file convention). Builds its own NextAuth instance from the lightweight
+// config only (no adapter, no Nodemailer) -- see src/auth.config.ts for why.
+// Proxy runs on the Node.js runtime in Next 16, so the edge-safe split is no
+// longer strictly required, but it keeps this file free of the DB adapter.
 const { auth } = NextAuth(authConfig);
 
 const adminEmails = (process.env.ADMIN_EMAILS ?? "")

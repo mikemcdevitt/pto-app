@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { schoolYears } from "@/db/schema";
 import { desc } from "drizzle-orm";
 import BulkUpdateForm from "./BulkUpdateForm";
+import { requireAdminPage } from "@/lib/require-admin";
 
 // Always hit the database on request; this route has no dynamic
 // function calls (no auth()/cookies()/searchParams), so Next.js would
@@ -11,6 +12,7 @@ import BulkUpdateForm from "./BulkUpdateForm";
 export const dynamic = "force-dynamic";
 
 export default async function FamiliesBulkUpdatePage() {
+  await requireAdminPage();
   const years = await db.select().from(schoolYears).orderBy(desc(schoolYears.sortYear));
 
   return (

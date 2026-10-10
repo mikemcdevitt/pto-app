@@ -1,6 +1,6 @@
-import { auth } from "@/auth";
 import { db } from "@/db";
-import { parents, parentStudents, students } from "@/db/schema";
+import { parentStudents, students } from "@/db/schema";
+import { requireParentPage } from "@/lib/require-parent";
 import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import StudentEditForm from "./StudentEditForm";
@@ -10,12 +10,8 @@ export default async function ParentEditStudentPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { parent } = await requireParentPage();
   const { id } = await params;
-  const session = await auth();
-  const email = session?.user?.email?.toLowerCase();
-
-  const [parent] = await db.select().from(parents).where(eq(parents.email, email!));
-  if (!parent) notFound();
 
   // Confirm this student is actually linked to this parent before showing anything
   const [link] = await db

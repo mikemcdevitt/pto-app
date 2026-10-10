@@ -2,8 +2,10 @@ import { db } from "@/db";
 import { schoolYears } from "@/db/schema";
 import { desc } from "drizzle-orm";
 import RolloverForm from "../RolloverForm";
+import { requireAdminPage } from "@/lib/require-admin";
 
 export default async function RolloverPage() {
+  await requireAdminPage();
   const years = await db.select().from(schoolYears).orderBy(desc(schoolYears.sortYear));
 
   return (

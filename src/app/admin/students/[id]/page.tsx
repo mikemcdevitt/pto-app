@@ -4,6 +4,7 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import type { Grade } from "@/lib/grades";
 import StudentForm from "../StudentForm";
+import { requireAdminPage } from "@/lib/require-admin";
 
 // Always hit the database on request; this route has no dynamic
 // function calls (no auth()/cookies()/searchParams), so Next.js would
@@ -17,6 +18,7 @@ export default async function EditStudentPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireAdminPage();
   const { id } = await params;
   const [student] = await db.select().from(students).where(eq(students.id, id));
   if (!student) notFound();

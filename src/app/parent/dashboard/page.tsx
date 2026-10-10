@@ -1,16 +1,10 @@
-import { auth } from "@/auth";
 import { db } from "@/db";
-import { parents, parentStudents, students, studentClassrooms, classrooms, schoolYears } from "@/db/schema";
+import { parentStudents, students, studentClassrooms, classrooms, schoolYears } from "@/db/schema";
+import { requireParentPage } from "@/lib/require-parent";
 import { and, desc, eq } from "drizzle-orm";
 
 export default async function ParentDashboardPage() {
-  const session = await auth();
-  const email = session?.user?.email?.toLowerCase();
-
-  const [parent] = await db
-    .select()
-    .from(parents)
-    .where(eq(parents.email, email!));
+  const { session, parent } = await requireParentPage();
 
   // Most recent school year, for showing each child's current classroom
   const [currentYear] = await db
@@ -38,7 +32,7 @@ export default async function ParentDashboardPage() {
       )
     )
     .leftJoin(classrooms, eq(studentClassrooms.classroomId, classrooms.id))
-    .where(eq(parentStudents.parentId, parent?.id ?? ""));
+    .where(eq(parentStudents.parentId, parent.id));
 
   return (
     <div className="p-6">

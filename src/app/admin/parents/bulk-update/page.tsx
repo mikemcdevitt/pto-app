@@ -1,6 +1,8 @@
 import BulkUpdateForm from "./BulkUpdateForm";
+import { requireAdminPage } from "@/lib/require-admin";
 
-export default function BulkUpdatePage() {
+export default async function BulkUpdatePage() {
+  await requireAdminPage();
   return (
     <div className="p-6 max-w-4xl">
       <h1 className="text-2xl font-bold mb-1">Bulk Update Parents</h1>

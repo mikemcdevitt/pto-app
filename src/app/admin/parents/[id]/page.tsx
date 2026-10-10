@@ -3,6 +3,7 @@ import { parents, parentStudents, parentEmails, students } from "@/db/schema";
 import { and, asc, eq, ne } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import ParentForm from "../ParentForm";
+import { requireAdminPage } from "@/lib/require-admin";
 
 // Always hit the database on request; this route has no dynamic
 // function calls (no auth()/cookies()/searchParams), so Next.js would
@@ -17,6 +18,7 @@ export default async function EditParentPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireAdminPage();
   const { id } = await params;
   const [parent] = await db.select().from(parents).where(eq(parents.id, id));
   if (!parent) notFound();

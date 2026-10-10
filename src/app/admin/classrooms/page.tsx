@@ -3,12 +3,14 @@ import { classrooms, schoolYears } from "@/db/schema";
 import { asc, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import YearFilter from "./YearFilter";
+import { requireAdminPage } from "@/lib/require-admin";
 
 export default async function ClassroomsPage({
   searchParams,
 }: {
   searchParams: Promise<{ year?: string }>;
 }) {
+  await requireAdminPage();
   const { year: selectedYearId } = await searchParams;
 
   const years = await db

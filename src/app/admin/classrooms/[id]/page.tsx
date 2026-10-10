@@ -3,12 +3,14 @@ import { classrooms, schoolYears } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import ClassroomForm from "../ClassroomForm";
+import { requireAdminPage } from "@/lib/require-admin";
 
 export default async function EditClassroomPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireAdminPage();
   const { id } = await params;
   const [classroom] = await db.select().from(classrooms).where(eq(classrooms.id, id));
   if (!classroom) notFound();

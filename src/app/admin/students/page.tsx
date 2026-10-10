@@ -5,6 +5,7 @@ import Link from "next/link";
 import { GRADE_ORDER, cohortStatusInSchoolYear, type Grade, type CohortStatus } from "@/lib/grades";
 import RosterFilters from "./RosterFilters";
 import RosterTable from "./RosterTable";
+import { requireAdminPage } from "@/lib/require-admin";
 
 // Always hit the database on request; this route has no dynamic
 // function calls (no auth()/cookies()/searchParams), so Next.js would
@@ -25,6 +26,7 @@ export default async function StudentsPage({
 }: {
   searchParams: Promise<{ schoolYearId?: string; grade?: string; classroomId?: string; sort?: string }>;
 }) {
+  await requireAdminPage();
   const { schoolYearId, grade: gradeParam, classroomId: classroomIdParam, sort: sortParam } = await searchParams;
 
   const years = await db.select().from(schoolYears).orderBy(desc(schoolYears.sortYear));

@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { students } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import ParentForm from "../ParentForm";
+import { requireAdminPage } from "@/lib/require-admin";
 
 // Always hit the database on request; this route has no dynamic
 // function calls (no auth()/cookies()/searchParams), so Next.js would
@@ -12,6 +13,7 @@ export const dynamic = "force-dynamic";
 
 
 export default async function NewParentPage() {
+  await requireAdminPage();
   const allStudents = await db.select().from(students).orderBy(asc(students.lastName), asc(students.firstName));
 
   return (

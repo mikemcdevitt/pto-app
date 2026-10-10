@@ -7,7 +7,7 @@ import authConfig from "./auth.config";
 
 // Full config: everything in auth.config.ts (edge-safe) plus the pieces that
 // need Node.js — the database adapter and the Nodemailer provider. Used by
-// route handlers and server components (Node runtime), never by middleware.
+// route handlers and server components (Node runtime), never by the proxy (src/proxy.ts).
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
   adapter: DrizzleAdapter(db, {

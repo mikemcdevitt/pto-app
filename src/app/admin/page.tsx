@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { requireAdminPage } from "@/lib/require-admin";
 
-export default function AdminHomePage() {
+export default async function AdminHomePage() {
+  await requireAdminPage();
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-6">Admin</h1>
