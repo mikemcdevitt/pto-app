@@ -9,6 +9,7 @@ import {
   unique,
   uniqueIndex,
   timestamp,
+  date,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { AdapterAccountType } from "next-auth/adapters";
@@ -218,15 +219,79 @@ export const fundraisingStatusEnum = pgEnum("fundraising_status", [
   "inactive",
 ]);
 
+// A business (or program) the PTO partners with. People live in
+// fundraising_contacts and are linked through fundraising_partner_contacts,
+// so one person can be the contact for several businesses and a business
+// can have several contacts over time.
 export const fundraisingPartners = pgTable("fundraising_partners", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
   status: fundraisingStatusEnum("status").notNull().default("prospective"),
-  contactName: text("contact_name"),
-  contactEmail: text("contact_email"),
-  contactPhone: text("contact_phone"),
   website: text("website"),
-  notes: text("notes"),
+  notes: text("notes"), // durable notes about the relationship
+  ptoOwner: text("pto_owner"), // who on the PTO side owns this relationship, plain text
+  followUpBy: date("follow_up_by"), // next follow-up due; the directory flags it when overdue
+});
+
+// A person at a partner business. Independent of any one partner -- see
+// fundraising_partner_contacts for the many-to-many link. Email is stored
+// lowercased and is unique when present (it's how the import dedupes people).
+export const fundraisingContacts = pgTable(
+  "fundraising_contacts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(),
+    email: text("email"),
+    phone: text("phone"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    uniqueEmail: uniqueIndex("fundraising_contacts_email_unique")
+      .on(table.email)
+      .where(sql`${table.email} is not null`),
+  })
+);
+
+// Many-to-many: which people are contacts for which partners. Role,
+// primary and current live here, not on the person, because the same
+// person can be the current owner at one business and a former contact
+// at another.
+export const fundraisingPartnerContacts = pgTable(
+  "fundraising_partner_contacts",
+  {
+    partnerId: uuid("partner_id")
+      .notNull()
+      .references(() => fundraisingPartners.id, { onDelete: "cascade" }),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => fundraisingContacts.id, { onDelete: "cascade" }),
+    role: text("role"), // free text: "owner", "event coordinator", "manager"...
+    isPrimary: boolean("is_primary").notNull().default(false),
+    isCurrent: boolean("is_current").notNull().default(true), // false = former contact, kept for history
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.partnerId, table.contactId] }),
+    onePrimaryPerPartner: uniqueIndex("one_primary_contact_per_partner")
+      .on(table.partnerId)
+      .where(sql`${table.isPrimary}`),
+  })
+);
+
+// Dated log of outreach to a partner ("sent email", "met the manager").
+// contactId is optional -- plenty of outreach isn't to a specific person.
+// date is nullable only so undated comments from the old spreadsheet can be
+// imported as-is; the app always sets one.
+export const fundraisingOutreach = pgTable("fundraising_outreach", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  partnerId: uuid("partner_id")
+    .notNull()
+    .references(() => fundraisingPartners.id, { onDelete: "cascade" }),
+  contactId: uuid("contact_id").references(() => fundraisingContacts.id, { onDelete: "set null" }),
+  date: date("date"),
+  ptoMember: text("pto_member"), // who on the PTO side, plain text
+  note: text("note").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const fundraisingCampaigns = pgTable(

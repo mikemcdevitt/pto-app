@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
 import authConfig from "@/auth.config";
+import { hasFundraisingAccess, isAdminEmail, isFundraisingPath } from "@/lib/access-lists";
 
 // Next.js 16 "proxy" (formerly middleware.ts -- same behavior, renamed
 // file convention). Builds its own NextAuth instance from the lightweight
@@ -10,10 +11,6 @@ import authConfig from "@/auth.config";
 // longer strictly required, but it keeps this file free of the DB adapter.
 const { auth } = NextAuth(authConfig);
 
-const adminEmails = (process.env.ADMIN_EMAILS ?? "")
-  .split(",")
-  .map((e) => e.trim().toLowerCase())
-  .filter(Boolean);
 
 export default auth(async (req) => {
   const path = req.nextUrl.pathname;
@@ -23,7 +20,15 @@ export default auth(async (req) => {
   const isParentRoute = path.startsWith("/parent");
 
   if (isAdminRoute) {
-    if (!email || !adminEmails.includes(email)) {
+    // /admin/fundraising is open to the fundraising list as well as admins;
+    // everything else under /admin is admins only. A fundraising-only user
+    // landing on /admin itself (e.g. after sign-in) is sent to their page
+    // rather than shown "unauthorized".
+    const allowed = isFundraisingPath(path) ? hasFundraisingAccess(email) : isAdminEmail(email);
+    if (!allowed) {
+      if (path === "/admin" && hasFundraisingAccess(email)) {
+        return NextResponse.redirect(new URL("/admin/fundraising", req.nextUrl.origin));
+      }
       const url = new URL("/sign-in", req.nextUrl.origin);
       url.searchParams.set("callbackUrl", path);
       if (email) url.searchParams.set("error", "unauthorized");

@@ -15,6 +15,20 @@
       "when": 1790716051470,
       "tag": "0001_add_parent_emails",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791641942456,
+      "tag": "0002_fundraising_contacts",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791641956891,
+      "tag": "0003_partner_owner_follow_up",
+      "breakpoints": true
     }
   ]
 }

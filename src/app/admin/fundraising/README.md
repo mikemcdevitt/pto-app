@@ -1,175 +1,145 @@
-# Fundraising Tracker
+# Fundraising Partners
 
-Admin route for tracking PTO fundraising partners (restaurants, retailers, service
-businesses that give back a percentage of sales) — contact cards for each partner, plus
-monthly/annual summaries of what's active and how much has come in.
+Admin area for the PTO's fundraising partners -- restaurants, retailers and services that
+give back a share of sales or donate gift cards -- replacing `Sprague Fundraising
+Partners.xlsx`.
 
-Source data: `Sprague Fundraising Partners.xlsx`, one sheet per school year (`2526`,
-`2425`, ...), which is why the data model below keys everything off the existing
-`schoolYears` table the same way `classrooms` and `studentClassrooms` already do.
+**Phase 1 (built): contacts.** Who the businesses are, who we talk to there, who on the
+PTO owns each relationship, and a dated outreach log with follow-up reminders.
 
-## What the spreadsheet actually contains
+**Phase 2 (deferred): money.** Per-year % back and amounts received. The tables for it
+(`fundraising_campaigns`, `fundraising_monthly_activity`) exist from the earlier design
+but nothing reads or writes them yet -- see [Phase 2](#phase-2-money-tracking-deferred).
 
-Each year-sheet is a flat table, one row per vendor:
+## Access
 
-| Column | Contents |
+| Who | Gets |
 |---|---|
-| A | Alphabetical group letter (e.g. `F`, `I-K`) — just a manual sort aid, not data worth storing |
-| B (`Vendor`) | Partner name |
-| C–L (`SEP`...`JUN`) | Per-month cell, inconsistently used as: a date (when a fundraiser ran or was requested), free text (`"up and running"`, `"ongoing till we quit it"`, `"--"`), or blank |
-| M (`% Back`) | Commission rate as a decimal (e.g. `0.1` = 10%) |
-| N (`Amount received`) | **One lump sum for the whole year** — not broken out by month |
-| O (`Comments`) | Free-text status/contact notes, e.g. `"Nov. 13 - Julie Amrose is new Contact"`, embedded emails, links |
+| `ADMIN_EMAILS` | everything, including fundraising |
+| `FUNDRAISING_EMAILS` (e.g. `fundraising@spragueschoolpto.com`) | `/admin/fundraising/**` and `/api/fundraising/**` only -- no family/student data |
 
-Below the vendor rows each sheet also has a `TO EXPLORE` / `Notes` section — prospective
-partners that were never formally onboarded (no contact yet, just an idea and who should
-reach out). Those are real data worth keeping, just at a different lifecycle stage.
-
-**Gap in the source data:** the sheet has no per-month dollar amount, only a per-month
-*status/date* and one annual total.
-
-## Decisions
-
-- **Monthly $ granularity**: keep one annual total per partner per year, matching how the
-  sheet is actually filled in — don't add per-month dollar entry. The monthly summary
-  therefore shows which partners were **active** each month (from the per-month
-  status/date), with the annual total attributed to whichever month it's logged against
-  (see `amountLoggedMonth` below), rather than a true month-by-month revenue split.
-- **`% Back` storage**: integer basis points (`1000` = 10%), consistent with the rest of
-  the schema avoiding floats for anything numeric that matters.
-- **Import status**: infer each partner's status from activity rather than defaulting
-  everything to `prospective` — `active` if the year's row has an amount received or any
-  month with a date/status, `inactive` if the partner has a campaign row for a past year
-  but no activity in the current one, `prospective` only for genuine `TO EXPLORE` rows
-  that were never actually contacted.
+Both lists live in [src/lib/access-lists.ts](../../../lib/access-lists.ts), shared by
+`src/proxy.ts` and `requireFundraising()` / `requireFundraisingPage()` in
+`src/lib/require-admin.ts`. A fundraising-only login lands on `/admin/fundraising` after
+sign-in (and from `/admin`), and the nav shows only the Fundraising link.
 
 ## Data model
 
-Add to [src/db/schema.ts](../../../db/schema.ts):
+```
+fundraising_partners          one row per business
+  name, status, website, notes
+  pto_owner      text -- who on the PTO side handles it (a volunteer's first name)
+  follow_up_by   date -- next follow-up due; directory flags it when today or past
 
-```ts
-export const fundraisingStatusEnum = pgEnum("fundraising_status", [
-  "prospective", // idea only, e.g. "TO EXPLORE" rows — no contact made yet
-  "contacted",   // outreach sent, awaiting response
-  "active",      // currently running / rolled out
-  "inactive",    // ran before, not currently active
-]);
+fundraising_contacts          one row per person, independent of any business
+  name, email (lowercased, unique when present), phone, notes
 
-// The contact-card directory. One row per business, independent of school year.
-export const fundraisingPartners = pgTable("fundraising_partners", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  name: text("name").notNull(),
-  status: fundraisingStatusEnum("status").notNull().default("prospective"),
-  contactName: text("contact_name"),
-  contactEmail: text("contact_email"),
-  contactPhone: text("contact_phone"),
-  website: text("website"),
-  notes: text("notes"), // durable notes about the relationship, not month-specific
-});
+fundraising_partner_contacts  many-to-many link
+  partner_id + contact_id (PK)
+  role         free text: "owner", "event coordinator"...
+  is_primary   at most one per partner (partial unique index)
+  is_current   false = former contact, kept for history
 
-// One row per partner per school year — the "% Back" / annual total from the sheet.
-export const fundraisingCampaigns = pgTable(
-  "fundraising_campaigns",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    partnerId: uuid("partner_id")
-      .notNull()
-      .references(() => fundraisingPartners.id, { onDelete: "cascade" }),
-    schoolYearId: uuid("school_year_id")
-      .notNull()
-      .references(() => schoolYears.id, { onDelete: "restrict" }),
-    percentBackBasisPoints: integer("percent_back_basis_points"), // 10% -> 1000
-    amountReceivedCents: integer("amount_received_cents").notNull().default(0), // one annual total, per Decisions above
-    amountLoggedMonth: integer("amount_logged_month"), // 1-12, nullable — which month the annual total counts toward in the monthly summary
-    comments: text("comments"),
-  },
-  (table) => ({
-    uniquePartnerYear: unique().on(table.partnerId, table.schoolYearId),
-  })
-);
-
-// One row per campaign per month — just the status/date that used to live in the
-// month cell (e.g. "up and running", a specific date). No dollar amount here; see Decisions.
-export const fundraisingMonthlyActivity = pgTable(
-  "fundraising_monthly_activity",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    campaignId: uuid("campaign_id")
-      .notNull()
-      .references(() => fundraisingCampaigns.id, { onDelete: "cascade" }),
-    month: integer("month").notNull(), // 1-12
-    note: text("note"), // free-text status or date-derived note, e.g. "up and running", "requested 11/13"
-  },
-  (table) => ({
-    uniqueCampaignMonth: unique().on(table.campaignId, table.month),
-  })
-);
+fundraising_outreach          dated log per partner
+  partner_id, contact_id (optional, set null if the person is deleted)
+  date (nullable only for undated imported comments), pto_member, note
 ```
 
-Money and the commission rate are stored as integers (cents, basis points) rather than
-floats — nothing else in the current schema stores money, so this is a new convention to
-establish here, but it matches the codebase's general avoidance of floats for anything
-that gets summed.
+Role / primary / current live on the link, not the person, because one person can be the
+current contact at one business and a former one at another (the spreadsheet already
+has one instructor who is the contact for two different partners).
+
+Status values: `prospective` (idea, no contact yet), `contacted` (outreach made, nothing
+running), `active` (running now), `inactive` (ran before, or declined).
+
+Migrations: `drizzle/0002_fundraising_contacts.sql` (new tables; drops the old
+`contact_name/email/phone` columns from partners) and
+`drizzle/0003_partner_owner_follow_up.sql`.
+
+## Behavior worth knowing
+
+- **Primary swaps are atomic.** Making someone primary clears the old primary in the same
+  `db.batch()` (a transaction on neon-http), so the one-primary index never trips.
+- **Marking someone former drops primary**; making a former contact primary makes them
+  current again.
+- **Logging outreach** on a `prospective` partner moves it to `contacted`, and the form's
+  "Next follow-up" field replaces the partner's follow-up date.
+- **Removing** a person from a partner only unlinks them. **Deleting** a person removes
+  all their links; outreach entries keep the note and lose the link.
+- **Deleting a partner** deletes its links and outreach log (people stay). The confirm
+  dialog suggests Inactive instead when the history matters.
+- Adding a "new person" whose email already exists is refused with the existing
+  person's name, so people get reused rather than duplicated.
 
 ## Routes
 
-Following the existing admin CRUD pattern ([parents](../parents), [classrooms](../classrooms)):
-
 ```
 src/app/admin/fundraising/
-  page.tsx                    # partner directory as contact cards, filter by status/year
-  FundraisingPartnerForm.tsx  # client form, mirrors ParentForm.tsx (fetch to /api, router.refresh)
-  new/page.tsx                # create a partner (status defaults to "prospective")
-  [id]/page.tsx                # partner detail: edit contact info + this year's campaign
-                               #   (percent back, annual total, monthly status grid)
-  summary/page.tsx            # monthly/annual summary report, year-filterable like
-                               #   classrooms/YearFilter.tsx
+  page.tsx                 directory: contact cards, status/"Follow-up due" tabs, search
+  new/page.tsx             add partner -> redirects to its page to add contacts
+  [id]/page.tsx            details form + contacts panel + outreach log
+  contacts/page.tsx        everyone, with the businesses they're linked to
+  contacts/new, [id]       add / edit a person
 
 src/app/api/fundraising/
-  partners/route.ts           # GET (list), POST (create)
-  partners/[id]/route.ts      # GET, PATCH, DELETE
-  campaigns/[id]/route.ts     # PATCH campaign (percentBackBasisPoints, amountReceivedCents, amountLoggedMonth, comments)
-  campaigns/[id]/activity/route.ts  # PATCH monthly status note for a campaign+month
+  partners                 GET, POST
+  partners/[id]            GET (with contacts + outreach), PATCH, DELETE
+  partners/[id]/contacts   POST link existing ({contactId}) or new ({newContact})
+  partners/[id]/contacts/[contactId]   PATCH role/isPrimary/isCurrent, DELETE (unlink)
+  partners/[id]/outreach   POST
+  outreach/[id]            DELETE
+  contacts, contacts/[id]  GET/POST, GET/PATCH/DELETE
 ```
 
-Add a nav link in [layout.tsx](../layout.tsx) alongside Classrooms/Parents/Students.
-`requireAdmin()` gating stays the same as every other admin route.
+## Importing the spreadsheet (one time)
 
-### Partner directory (`page.tsx`)
+Two steps, same look-before-you-leap pattern as the family import. The hand-curated
+merges, people and outreach notes live in `exclude/fundraising-curation.json`
+(gitignored -- real names and contact details), not in the script.
 
-Contact cards, not a table — one card per partner showing name, status badge, contact
-info, website, and (when a school year is selected) that year's `% Back` and running
-total. Reuse the `YearFilter` component's pattern for a school-year selector, defaulting
-to the most recent year like `classrooms/page.tsx` does.
+```bash
+# 1. Stage: reads the .xlsx, writes a review JSON + a readable .md table. No DB access.
+python3 scripts/stage-fundraising-contacts.py "exclude/Sprague Fundraising Partners.xlsx" -o exclude/fundraising-staged
 
-### Summary (`summary/page.tsx`)
+# 2. Review exclude/fundraising-staged.md, edit the .json if needed, then:
+npx tsx scripts/import-fundraising-contacts.ts exclude/fundraising-staged.json            # dry run
+npx tsx scripts/import-fundraising-contacts.ts exclude/fundraising-staged.json --commit   # write
+```
 
-For the selected school year: total raised (sum of `amountReceivedCents` across
-campaigns), count of active partners, and a month-by-month grid (`SEP`...`JUN` columns,
-same order as the sheet) showing which partners had activity that month, pulled from
-`fundraisingMonthlyActivity`. Each partner's annual total appears once, under whichever
-month its `amountLoggedMonth` points to — this is an approximation of "amount raised per
-month," not a precise one, per the [Decisions](#decisions) above.
+The import validates the file first, refuses to run if `fundraising_partners` already has
+rows, and inserts everything in one batch (all or nothing).
 
-## Importing the existing spreadsheet
+What staging does with the sheet (curation lives at the top of the .py):
 
-One-time script (not a route) to seed from `Sprague Fundraising Partners.xlsx`, following
-the shape of [src/db/seed.ts](../../../db/seed.ts):
+- **Merges near-duplicate business names** (e.g. "Great Wok" -> "The Great Wok", and
+  rows where a contact's name was typed into the business name).
+- **Status is judged against 2025-26** (the newest sheet): activity logged in 2025-26 ->
+  active; ran in 2024-25 only -> inactive; outreach but never ran -> contacted; listed or
+  "TO EXPLORE" businesses never contacted -> prospective. Hand overrides for declines,
+  bankruptcy, outreach-only rows.
+- **Pulls people out of the comment text** into contacts linked to their businesses.
+  Several are first-name only, as in the sheet.
+- **Turns comments into outreach entries**, dated where the comment gives an unambiguous
+  date, prefixed with the sheet year (`[2024-25 sheet] ...`) so undated ones keep context.
+- **Leaves out event ideas** (Principal for a Day, Tat the Teacher, Turkey-Athon, ...) --
+  they aren't businesses. Listed in the review file for reference.
+- **Ignores money**: % back, amounts, per-month dollar cells.
 
-1. One `fundraisingPartners` row per unique vendor name across **both** sheets (`2526`,
-   `2425`) — de-dupe by name (watch for near-duplicates like `"Ski & Tennis"` vs.
-   `"Boston Ski & Tennis"`, `"Timesaving Auto Det"` vs. `"Timesaving Auto Detailing"`).
-2. One `fundraisingCampaigns` row per (partner, sheet-year) pair that has any data,
-   mapping sheet `2526` → school year `2025-2026`, `2425` → `2024-2025`.
-3. `Amount received` → `fundraisingCampaigns.amountReceivedCents` directly (dollars × 100).
-   `amountLoggedMonth` can be left null on import (the sheet doesn't say which month the
-   money landed) — set it later by hand for reporting if it matters, or default it to the
-   last month with recorded activity for that partner.
-4. `% Back` → `percentBackBasisPoints` (decimal × 10000, e.g. `0.1` → `1000`).
-5. Per-month cells that are dates or status text → one `fundraisingMonthlyActivity` row
-   per non-blank cell, `note` holding the date (formatted) or the text verbatim
-   (`"up and running"`, `"--"`, `"ongoing till we quit it"`).
-6. Rows under `TO EXPLORE` → `fundraisingPartners` with `status: "prospective"` and no
-   campaign row at all (they were never actually run).
-7. Spot-check the `2425` sheet's `TOTAL` row (`$2,523.34`) against the sum of imported
-   `amountReceivedCents` for that year as a sanity check on the import script.
+Review flags in the staged file: two 2024-25 partners that may be the same event entered
+twice; passive programs (Box Tops, Shutterfly, ...) marked inactive only because 2025-26
+is blank.
+
+## Phase 2: money tracking (deferred)
+
+Kept from the original design for when this picks back up:
+
+- One row per partner per school year in `fundraising_campaigns` (`percent_back_basis_points`,
+  `amount_received_cents`, `amount_logged_month`), monthly status notes in
+  `fundraising_monthly_activity`. Money as integer cents, rates as basis points.
+- Open questions from the spreadsheet review:
+  1. Some month cells hold dollar amounts that add up to the annual total. Add an
+     optional `amount_cents` to monthly activity, or stay annual-only?
+  2. Do gift cards count toward totals or get tracked as in-kind?
+  3. The 2024-25 total ($2,523.34 per the sheet) may double-count one $260 event.
+- Sheet quirks the money import will need to handle: wrong years typed into dates (go by
+  the column, not the cell's year), progress notes in columns P/Q/S.
