@@ -57,8 +57,11 @@ export function cohortStatusInSchoolYear(
 ): CohortStatus {
   if (cohortYear == null || Number.isNaN(cohortYear)) return { kind: "unknown" };
   const index = schoolYearSortYear - cohortYear + 5;
-  if (index < 0) return { kind: "graduated" };
-  if (index >= GRADE_ORDER.length) return { kind: "not-yet" };
+  // index is how many grades into K-5 this school year falls. Negative: the
+  // cohort is still years away from kindergarten. Past the last grade: they
+  // finished 5th grade in an earlier year.
+  if (index < 0) return { kind: "not-yet" };
+  if (index >= GRADE_ORDER.length) return { kind: "graduated" };
   return { kind: "grade", grade: GRADE_ORDER[index] };
 }
 
