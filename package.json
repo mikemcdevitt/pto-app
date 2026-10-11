@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed:preview": "tsx scripts/seed-preview.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",
